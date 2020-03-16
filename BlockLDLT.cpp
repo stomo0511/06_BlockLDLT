@@ -62,7 +62,6 @@ int main(const int argc, const char **argv)
 	const int lda = m;
 
 	double* A = new double [m*m];    // Original matrix
-	int* ipiv = new int[m];          // Pivot vector
 
 	Gen_rand_lower_mat(m,m,A);       // Randomize elements of orig. matrix
 
@@ -83,60 +82,54 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
-	Show_mat(m,m,A);
-
 	double timer = omp_get_wtime();    // Timer start
 
-	assert(0 == LAPACKE_dsytrf(MKL_COL_MAJOR, 'L', m, A, lda, ipiv));
+//	assert(0 == LAPACKE_dsytrf(MKL_COL_MAJOR, 'L', m, A, lda, ipiv));
+
+	double* v = new double [m];
+	double tmp;
+	for (int k=0; k<m; k++)
+	{
+		for (int i=0; i<k; i++)
+			v[i] = A[k+i*lda]*A[i+i*lda];
+
+		tmp = 0.0;
+		for (int i=0; i<k; i++)
+			tmp += A[k+i*lda]*v[i];
+		v[k] = A[k+k*lda] - tmp;
+
+		A[k+k*lda] = v[k];
+
+		for (int i=k+1; i<m; i++)
+		{
+			tmp = 0.0;
+			for (int j=0; j<k; j++)
+				tmp += A[i+j*lda]*v[j];
+			A[i+k*lda] = (A[i+k*lda] - tmp) / v[k];
+		}
+
+	}
+	delete [] v;
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 
 	cout << "m = " << m << ", time = " << timer << endl;
-
-	cout << "LDL(A):\n";
-	Show_mat(m,m,A);
-
-	for (int i=0; i<m; i++)
-		printf("%3d\n",ipiv[i]);
-	printf("\n");
 
 	////////// Debug mode //////////
 	#ifdef DEBUG
 	// Make L and D
 	for (int k=0; k<m; k++)
 	{
-		if (ipiv[k] > 0)  // s=1
-		{
-			D[k + k*lda] = A[k + k*lda];
-			for (int i=k+1; i<m; i++)
-				L[i + k*lda] = A[i + k*lda];
-		}
-		else   // s=2
-		{
-			D[k + k*lda] = A[k + k*lda];
-			D[(k+1) + (k+1)*lda] = A[(k+1) + (k+1)*lda];
-			D[k + (k+1)*lda] = D[(k+1) + k*lda] = A[(k+1) + k*lda];
-
-			for (int i=k+2; i<m; i++)
-			{
-				L[i + k*lda] = A[i + k*lda];
-				L[i + (k+1)*lda] = A[i + (k+1)*lda];
-			}
-			k++;
-		}
+		D[k + k*lda] = A[k + k*lda];
+		for (int i=k+1; i<m; i++)
+			L[i + k*lda] = A[i + k*lda];
 	}
-
-
-	Show_mat(m,m,OA);
-	Show_mat(m,m,D);
-	Show_mat(m,m,L);
 
 	double* W = new double[m*m];
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
 			m, m, m, 1.0, L, lda, D, m, 0.0, W, m);
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 			m, m, m, -1.0, W, lda, L, m, 1.0, OA, m);
-
 	delete [] W;
 
 	cout << "Debug mode: \n";
@@ -149,7 +142,6 @@ int main(const int argc, const char **argv)
 	////////// Debug mode //////////
 
 	delete [] A;
-	delete [] ipiv;
 
 	return EXIT_SUCCESS;
 }
