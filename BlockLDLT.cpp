@@ -82,6 +82,8 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
+//	Show_mat(m,m,A);
+
 	double timer = omp_get_wtime();    // Timer start
 
 //	assert(0 == LAPACKE_dsytrf(MKL_COL_MAJOR, 'L', m, A, lda, ipiv));
@@ -93,27 +95,20 @@ int main(const int argc, const char **argv)
 		for (int i=0; i<k; i++)
 			v[i] = A[k+i*lda]*A[i+i*lda];
 
-		tmp = 0.0;
-		for (int i=0; i<k; i++)
-			tmp += A[k+i*lda]*v[i];
-		v[k] = A[k+k*lda] - tmp;
-
+		v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
 		A[k+k*lda] = v[k];
 
-		for (int i=k+1; i<m; i++)
-		{
-			tmp = 0.0;
-			for (int j=0; j<k; j++)
-				tmp += A[i+j*lda]*v[j];
-			A[i+k*lda] = (A[i+k*lda] - tmp) / v[k];
-		}
-
+		cblas_dgemv(CblasColMajor, CblasNoTrans,
+				m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
+		cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
 	}
 	delete [] v;
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 
 	cout << "m = " << m << ", time = " << timer << endl;
+
+//	Show_mat(m,m,A);
 
 	////////// Debug mode //////////
 	#ifdef DEBUG
