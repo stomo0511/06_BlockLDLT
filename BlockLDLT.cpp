@@ -82,14 +82,11 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
-//	Show_mat(m,m,A);
+	Show_mat(m,m,A);
 
 	double timer = omp_get_wtime();    // Timer start
 
-//	assert(0 == LAPACKE_dsytrf(MKL_COL_MAJOR, 'L', m, A, lda, ipiv));
-
 	double* v = new double [m];
-	double tmp;
 	for (int k=0; k<m; k++)
 	{
 		for (int i=0; i<k; i++)
@@ -108,7 +105,7 @@ int main(const int argc, const char **argv)
 
 	cout << "m = " << m << ", time = " << timer << endl;
 
-//	Show_mat(m,m,A);
+	Show_mat(m,m,A);
 
 	////////// Debug mode //////////
 	#ifdef DEBUG
