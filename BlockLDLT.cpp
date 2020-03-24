@@ -17,7 +17,7 @@
 using namespace std;
 
 // Generate random LOWER matrix
-void Gen_rand_lower_mat(const int m, const int n, double *A)
+void Gen_rand_lower_mat(const int m, const int n, double* A)
 {
 //	srand(time(NULL));
 	srand(20200314);
@@ -31,7 +31,7 @@ void Gen_rand_lower_mat(const int m, const int n, double *A)
 }
 
 // Show matrix
-void Show_mat(const int m, const int n, double *A)
+void Show_mat(const int m, const int n, double* A)
 {
 	for (int i=0; i<m; i++) {
 		for (int j=0; j<n; j++)
@@ -39,6 +39,24 @@ void Show_mat(const int m, const int n, double *A)
 		cout << endl;
 	}
 	cout << endl;
+}
+
+void dsytrf2(const int m, const int lda, double* A)
+{
+	double* v = new double [m];
+	for (int k=0; k<m; k++)
+	{
+		for (int i=0; i<k; i++)
+			v[i] = A[k+i*lda]*A[i+i*lda];
+
+		v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
+		A[k+k*lda] = v[k];
+
+		cblas_dgemv(CblasColMajor, CblasNoTrans,
+				m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
+		cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
+	}
+	delete [] v;
 }
 
 // Debug mode
@@ -55,11 +73,13 @@ extern void trace_label(const char *color, const char *label);
 
 int main(const int argc, const char **argv)
 {
-	// Usage "a.out [size of matrix: m ]"
-	assert(argc > 1);
+	// Usage "a.out [size of matrix: m ] [tile size: b]"
+	assert(argc > 2);
 
 	const int m = atoi(argv[1]);     // # rows and columns <- the matrix is square
 	const int lda = m;
+	const int b = atoi(argv[2]);     // tile size
+	const int p =  (m % b == 0) ? m/b : m/b+1;
 
 	double* A = new double [m*m];    // Original matrix
 
@@ -82,24 +102,30 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
-	Show_mat(m,m,A);
+//	Show_mat(m,m,A);
 
 	double timer = omp_get_wtime();    // Timer start
 
-	double* v = new double [m];
-	for (int k=0; k<m; k++)
+	for (int k=0; k<p; k++)
 	{
-		for (int i=0; i<k; i++)
-			v[i] = A[k+i*lda]*A[i+i*lda];
-
-		v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
-		A[k+k*lda] = v[k];
-
-		cblas_dgemv(CblasColMajor, CblasNoTrans,
-				m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
-		cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
+		int kb = min(m-k*b,b);
+		dsytrf2(kb,lda,A+(k+k*lda));
 	}
-	delete [] v;
+
+//	double* v = new double [m];
+//	for (int k=0; k<m; k++)
+//	{
+//		for (int i=0; i<k; i++)
+//			v[i] = A[k+i*lda]*A[i+i*lda];
+//
+//		v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
+//		A[k+k*lda] = v[k];
+//
+//		cblas_dgemv(CblasColMajor, CblasNoTrans,
+//				m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
+//		cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
+//	}
+//	delete [] v;
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 
