@@ -76,14 +76,15 @@ int main(const int argc, const char **argv)
 	// Usage "a.out [size of matrix: m ] [tile size: b]"
 	assert(argc > 2);
 
-	const int m = atoi(argv[1]);     // # rows and columns <- the matrix is square
-	const int lda = m;
+	const int m = atoi(argv[1]);     // # rows and columns <- square matrix
+	const int lda = m;               // Leading dimension of A
 	const int b = atoi(argv[2]);     // tile size
-	const int p =  (m % b == 0) ? m/b : m/b+1;
+	const int p =  (m % b == 0) ? m/b : m/b+1;   // # tiles
 
 	double* A = new double [m*m];    // Original matrix
 	double* d = new double [b];      // Diagonal elements of D_{kk}
 	double* LD = new double [b*b];   // L_{ik}*D_{kk}
+	const int ldd = b;               // Leading dimension of LD
 
 	Gen_rand_lower_mat(m,m,A);       // Randomize elements of orig. matrix
 
@@ -121,16 +122,41 @@ int main(const int argc, const char **argv)
 		{
 			int ib = min(m-i*b,b);
 
-			for (int j=0; j<ib-1; j++)
-				cblas_dscal(ib-(j+1), d[j], Akk+(j+1)+j*lda, 1);
+			// Temprarily transform A_{kk}
+			for (int l=0; l<ib-1; l++)
+				cblas_dscal(ib-(l+1), d[l], Akk+(l+1)+l*lda, 1);
 
 			double *Aik = A+((i*b)+(k*b)*lda);
 
+			// Generate L_{ik}
 			cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
 						ib, kb, 1.0, Akk, lda, Aik, lda);
 
-			for (int j=0; j<ib-1; j++)
-				cblas_dscal(ib-(j+1), 1.0/d[j], Akk+(j+1)+j*lda, 1);
+			// Restore A_{kk}
+			for (int l=0; l<ib-1; l++)
+				cblas_dscal(ib-(l+1), 1.0/d[l], Akk+(l+1)+l*lda, 1);
+
+			// LD = L_{ik}*D_{kk}
+			for (int l=0; l<kb; l++)
+			{
+				cblas_dcopy(ib, Aik+l*lda, 1, LD+l*ldd, 1);
+				cblas_dscal(ib, d[l], LD+l*ldd, 1);
+			}
+
+			for (int j=k+1; j<=i; j++)
+			{
+				int jb = min(m-j*b,b);
+				double *Aij = A+((i*b)+(j*b)*lda);
+				double *Ljk = A+((j*b)+(k*b)*lda);
+				cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+						ib, jb, kb, -1.0, LD, ldd, Ljk, lda, 1.0, Aij, lda);
+
+				// Banish upper part of A_{ii}
+				if (i==j)
+					for (int ii=0; ii<ib; ii++)
+						for (int jj=ii+1; jj<jb; jj++)
+							Aij[ii+jj*lda] = 0.0;
+			}
 		}
 	}
 
