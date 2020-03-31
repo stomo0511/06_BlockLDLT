@@ -164,9 +164,9 @@ int main(const int argc, const char **argv)
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 
-	cout << "m = " << m << ", time = " << timer << endl;
+	cout << m << ", " << timer << endl;
 
-	Show_mat(m,m,A);
+//	Show_mat(m,m,A);
 
 	////////// Debug mode //////////
 	#ifdef DEBUG
