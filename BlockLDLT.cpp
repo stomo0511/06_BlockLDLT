@@ -60,7 +60,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Debug mode
-#define DEBUG
+//#define DEBUG
 
 // Trace mode
 //#define TRACE
@@ -107,15 +107,30 @@ int main(const int argc, const char **argv)
 
 //	Show_mat(m,m,A);
 
+	#ifdef trace
+	trace_label("Red", "DSYTRF");
+	trace_label("Green", "DTRSM");
+	trace_label("Bule", "DGEMM");
+	#endif
+
 	double timer = omp_get_wtime();    // Timer start
 
 	for (int k=0; k<p; k++)
 	{
 		int kb = min(m-k*b,b);
+
+		#ifdef trace
+		trace_cpu_start();
+		#endif
+
 		double *Akk = A+((k*b)+(k*b)*lda);
 
 		// DSYTRF
 		dsytrf(kb,lda,Akk);
+
+		#ifdef TRACE
+		trace_cpu_stop("Red");
+		#endif
 
 		for (int i=0; i<kb; i++)    // d: diagnal elements of D_{kk}
 			d[i] = Akk[i+i*lda];
@@ -123,6 +138,9 @@ int main(const int argc, const char **argv)
 		for (int i=k+1; i<p; i++)
 		{
 			int ib = min(m-i*b,b);
+
+			#ifdef TRACE
+			#endif
 
 			// Temprarily transform A_{kk} <- L_{kk} * D_{kk}
 			for (int l=0; l<kb-1; l++)
@@ -138,6 +156,9 @@ int main(const int argc, const char **argv)
 			for (int l=0; l<kb-1; l++)
 				cblas_dscal(kb-(l+1), 1.0/d[l], Akk+(l+1)+l*lda, 1);
 
+			#ifdef TRACE
+			#endif
+
 			// LD = L_{ik}*D_{kk}
 			for (int l=0; l<kb; l++)
 			{
@@ -148,6 +169,10 @@ int main(const int argc, const char **argv)
 			for (int j=k+1; j<=i; j++)
 			{
 				int jb = min(m-j*b,b);
+
+				#ifdef TRACE
+				#endif
+
 				double *Aij = A+((i*b)+(j*b)*lda);
 				double *Ljk = A+((j*b)+(k*b)*lda);
 				cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
@@ -158,6 +183,9 @@ int main(const int argc, const char **argv)
 					for (int ii=0; ii<ib; ii++)
 						for (int jj=ii+1; jj<jb; jj++)
 							Aij[ii+jj*lda] = 0.0;
+
+				#ifdef TRACE
+				#endif
 			}
 		}
 	}
