@@ -41,7 +41,7 @@ void Show_mat(const int m, const int n, double* A)
 	cout << endl;
 }
 
-void dsytrf2(const int m, const int lda, double* A)
+void dsytrf(const int m, const int lda, double* A)
 {
 	double* v = new double [m];
 	for (int k=0; k<m; k++)
@@ -77,11 +77,11 @@ int main(const int argc, const char **argv)
 	assert(argc > 2);
 
 	const int m = atoi(argv[1]);     // # rows and columns <- square matrix
-	const int lda = m;               // Leading dimension of A
 	const int b = atoi(argv[2]);     // tile size
 	const int p =  (m % b == 0) ? m/b : m/b+1;   // # tiles
 
 	double* A = new double [m*m];    // Original matrix
+	const int lda = m;               // Leading dimension of A
 	double* d = new double [b];      // Diagonal elements of D_{kk}
 	double* LD = new double [b*b];   // L_{ik}*D_{kk}
 	const int ldd = b;               // Leading dimension of LD
@@ -105,7 +105,7 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
-	Show_mat(m,m,A);
+//	Show_mat(m,m,A);
 
 	double timer = omp_get_wtime();    // Timer start
 
@@ -113,7 +113,9 @@ int main(const int argc, const char **argv)
 	{
 		int kb = min(m-k*b,b);
 		double *Akk = A+((k*b)+(k*b)*lda);
-		dsytrf2(kb,lda,Akk);
+
+		// DSYTRF
+		dsytrf(kb,lda,Akk);
 
 		for (int i=0; i<kb; i++)    // d: diagnal elements of D_{kk}
 			d[i] = Akk[i+i*lda];
@@ -122,9 +124,9 @@ int main(const int argc, const char **argv)
 		{
 			int ib = min(m-i*b,b);
 
-			// Temprarily transform A_{kk}
-			for (int l=0; l<ib-1; l++)
-				cblas_dscal(ib-(l+1), d[l], Akk+(l+1)+l*lda, 1);
+			// Temprarily transform A_{kk} <- L_{kk} * D_{kk}
+			for (int l=0; l<kb-1; l++)
+				cblas_dscal(kb-(l+1), d[l], Akk+(l+1)+l*lda, 1);
 
 			double *Aik = A+((i*b)+(k*b)*lda);
 
@@ -133,8 +135,8 @@ int main(const int argc, const char **argv)
 						ib, kb, 1.0, Akk, lda, Aik, lda);
 
 			// Restore A_{kk}
-			for (int l=0; l<ib-1; l++)
-				cblas_dscal(ib-(l+1), 1.0/d[l], Akk+(l+1)+l*lda, 1);
+			for (int l=0; l<kb-1; l++)
+				cblas_dscal(kb-(l+1), 1.0/d[l], Akk+(l+1)+l*lda, 1);
 
 			// LD = L_{ik}*D_{kk}
 			for (int l=0; l<kb; l++)
