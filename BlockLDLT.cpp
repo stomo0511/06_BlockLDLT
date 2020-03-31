@@ -82,6 +82,8 @@ int main(const int argc, const char **argv)
 	const int p =  (m % b == 0) ? m/b : m/b+1;
 
 	double* A = new double [m*m];    // Original matrix
+	double* d = new double [b];      // Diagonal elements of D_{kk}
+	double* LD = new double [b*b];   // L_{ik}*D_{kk}
 
 	Gen_rand_lower_mat(m,m,A);       // Randomize elements of orig. matrix
 
@@ -102,30 +104,35 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
-//	Show_mat(m,m,A);
+	Show_mat(m,m,A);
 
 	double timer = omp_get_wtime();    // Timer start
 
 	for (int k=0; k<p; k++)
 	{
 		int kb = min(m-k*b,b);
-		dsytrf2(kb,lda,A+(k+k*lda));
-	}
+		double *Akk = A+((k*b)+(k*b)*lda);
+		dsytrf2(kb,lda,Akk);
 
-//	double* v = new double [m];
-//	for (int k=0; k<m; k++)
-//	{
-//		for (int i=0; i<k; i++)
-//			v[i] = A[k+i*lda]*A[i+i*lda];
-//
-//		v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
-//		A[k+k*lda] = v[k];
-//
-//		cblas_dgemv(CblasColMajor, CblasNoTrans,
-//				m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
-//		cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
-//	}
-//	delete [] v;
+		for (int i=0; i<kb; i++)    // d: diagnal elements of D_{kk}
+			d[i] = Akk[i+i*lda];
+
+		for (int i=k+1; i<p; i++)
+		{
+			int ib = min(m-i*b,b);
+
+			for (int j=0; j<ib-1; j++)
+				cblas_dscal(ib-(j+1), d[j], Akk+(j+1)+j*lda, 1);
+
+			double *Aik = A+((i*b)+(k*b)*lda);
+
+			cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
+						ib, kb, 1.0, Akk, lda, Aik, lda);
+
+			for (int j=0; j<ib-1; j++)
+				cblas_dscal(ib-(j+1), 1.0/d[j], Akk+(j+1)+j*lda, 1);
+		}
+	}
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 
@@ -160,6 +167,8 @@ int main(const int argc, const char **argv)
 	////////// Debug mode //////////
 
 	delete [] A;
+	delete [] d;
+	delete [] LD;
 
 	return EXIT_SUCCESS;
 }

@@ -26,7 +26,7 @@ TARGET = BlockLDLT
 all:	$(TARGET)
 
 $(TARGET):	$(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) -L$(LIB_DIR) $(LIBS) -L$(MKL_LIB_DIR) $(MKL_LIBS) 
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) -L$(LIB_DIR) -L$(MKL_LIB_DIR) $(MKL_LIBS) $(LIBS)
 
 %.o: %.cpp
 	$(CXX) -c $(CXXFLAGS) -I$(MKL_INC_DIR) -o $@ $<
