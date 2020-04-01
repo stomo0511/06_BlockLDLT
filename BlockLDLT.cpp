@@ -60,7 +60,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Debug mode
-//#define DEBUG
+#define DEBUG
 
 // Trace mode
 //#define TRACE
@@ -82,7 +82,7 @@ int main(const int argc, const char **argv)
 
 	double* A = new double [m*m];    // Original matrix
 	const int lda = m;               // Leading dimension of A
-	double* d = new double [b];      // Diagonal elements of D_{kk}
+	double* DD = new double [m];     // Diagonal elements of D_{kk}
 	double* LD = new double [b*b];   // L_{ik}*D_{kk}
 	const int ldd = b;               // Leading dimension of LD
 
@@ -132,8 +132,8 @@ int main(const int argc, const char **argv)
 		trace_cpu_stop("Red");
 		#endif
 
-		for (int i=0; i<kb; i++)    // d: diagnal elements of D_{kk}
-			d[i] = Akk[i+i*lda];
+		for (int i=0; i<kb; i++)    // D: diagnal elements of D_{kk}
+			DD[i+k*ldd] = Akk[i+i*lda];
 
 		for (int i=k+1; i<p; i++)
 		{
@@ -144,7 +144,7 @@ int main(const int argc, const char **argv)
 
 			// Temprarily transform A_{kk} <- L_{kk} * D_{kk}
 			for (int l=0; l<kb-1; l++)
-				cblas_dscal(kb-(l+1), d[l], Akk+(l+1)+l*lda, 1);
+				cblas_dscal(kb-(l+1), DD[l+k*ldd], Akk+(l+1)+l*lda, 1);
 
 			double *Aik = A+((i*b)+(k*b)*lda);
 
@@ -154,7 +154,7 @@ int main(const int argc, const char **argv)
 
 			// Restore A_{kk}
 			for (int l=0; l<kb-1; l++)
-				cblas_dscal(kb-(l+1), 1.0/d[l], Akk+(l+1)+l*lda, 1);
+				cblas_dscal(kb-(l+1), 1.0/DD[l+k*ldd], Akk+(l+1)+l*lda, 1);
 
 			#ifdef TRACE
 			#endif
@@ -163,7 +163,7 @@ int main(const int argc, const char **argv)
 			for (int l=0; l<kb; l++)
 			{
 				cblas_dcopy(ib, Aik+l*lda, 1, LD+l*ldd, 1);
-				cblas_dscal(ib, d[l], LD+l*ldd, 1);
+				cblas_dscal(ib, DD[l+k*ldd], LD+l*ldd, 1);
 			}
 
 			for (int j=k+1; j<=i; j++)
@@ -223,7 +223,7 @@ int main(const int argc, const char **argv)
 	////////// Debug mode //////////
 
 	delete [] A;
-	delete [] d;
+	delete [] DD;
 	delete [] LD;
 
 	return EXIT_SUCCESS;
