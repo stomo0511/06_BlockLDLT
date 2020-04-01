@@ -82,9 +82,13 @@ int main(const int argc, const char **argv)
 
 	double* A = new double [m*m];    // Original matrix
 	const int lda = m;               // Leading dimension of A
-	double* DD = new double [m];     // Diagonal elements of D_{kk}
-	double* LD = new double [b*b];   // L_{ik}*D_{kk}
+	double* DD = new double [m];     // DD_k = Diagonal elements of D_{kk}
+	double* WD = new double [b*m];   // WD_k = L_{kk}*D_{kk}
+	double* LD = new double [b*m];   // LD_k = L_{ik}*D_{kk}
 	const int ldd = b;               // Leading dimension of LD
+
+	for (int i=0; i<b*m; i++)        // Zero initialize of WD
+		WD[i] = 0.0;
 
 	Gen_rand_lower_mat(m,m,A);       // Randomize elements of orig. matrix
 
@@ -105,8 +109,6 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
-//	Show_mat(m,m,A);
-
 	#ifdef trace
 	trace_label("Red", "DSYTRF");
 	trace_label("Green", "DTRSM");
@@ -115,6 +117,7 @@ int main(const int argc, const char **argv)
 
 	double timer = omp_get_wtime();    // Timer start
 
+	/////////////////////////////////////////////////////////
 	for (int k=0; k<p; k++)
 	{
 		int kb = min(m-k*b,b);
@@ -123,7 +126,7 @@ int main(const int argc, const char **argv)
 		trace_cpu_start();
 		#endif
 
-		double *Akk = A+((k*b)+(k*b)*lda);
+		double* Akk = A+((k*b)+(k*b)*lda);   // Akk: Top address of A_{kk}
 
 		// DSYTRF
 		dsytrf(kb,lda,Akk);
@@ -132,8 +135,14 @@ int main(const int argc, const char **argv)
 		trace_cpu_stop("Red");
 		#endif
 
-		for (int i=0; i<kb; i++)    // D: diagnal elements of D_{kk}
-			DD[i+k*ldd] = Akk[i+i*lda];
+		double* Dk = DD+k*ldd;
+		for (int i=0; i<kb; i++)     // Dk: diagnal elements of D_{kk}
+			Dk[i] = Akk[i+i*lda];
+
+		double* Wkk = WD+(k*ldd);    // Wkk: Top address of L_{kk} * D_{kk}
+		for (int j=0; j<kb; j++)
+			for (int i=j; i<kb; i++)
+				Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Akk[i+j*lda];
 
 		for (int i=k+1; i<p; i++)
 		{
@@ -142,28 +151,20 @@ int main(const int argc, const char **argv)
 			#ifdef TRACE
 			#endif
 
-			// Temprarily transform A_{kk} <- L_{kk} * D_{kk}
-			for (int l=0; l<kb-1; l++)
-				cblas_dscal(kb-(l+1), DD[l+k*ldd], Akk+(l+1)+l*lda, 1);
-
+			// Updatre A_{ik}
 			double *Aik = A+((i*b)+(k*b)*lda);
-
-			// Generate L_{ik}
 			cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
-						ib, kb, 1.0, Akk, lda, Aik, lda);
-
-			// Restore A_{kk}
-			for (int l=0; l<kb-1; l++)
-				cblas_dscal(kb-(l+1), 1.0/DD[l+k*ldd], Akk+(l+1)+l*lda, 1);
+						ib, kb, 1.0, Wkk, ldd, Aik, lda);
 
 			#ifdef TRACE
 			#endif
 
-			// LD = L_{ik}*D_{kk}
+			// LD_k = L_{ik}*D_{kk}
+			double* LDk = LD+(k*ldd);
 			for (int l=0; l<kb; l++)
 			{
-				cblas_dcopy(ib, Aik+l*lda, 1, LD+l*ldd, 1);
-				cblas_dscal(ib, DD[l+k*ldd], LD+l*ldd, 1);
+				cblas_dcopy(ib, Aik+l*lda, 1, LDk+l*ldd, 1);
+				cblas_dscal(ib, DD[l+k*ldd], LDk+l*ldd, 1);
 			}
 
 			for (int j=k+1; j<=i; j++)
@@ -173,10 +174,11 @@ int main(const int argc, const char **argv)
 				#ifdef TRACE
 				#endif
 
+				// Update A_{ij}
 				double *Aij = A+((i*b)+(j*b)*lda);
 				double *Ljk = A+((j*b)+(k*b)*lda);
 				cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-						ib, jb, kb, -1.0, LD, ldd, Ljk, lda, 1.0, Aij, lda);
+						ib, jb, kb, -1.0, LD+k*ldd, ldd, Ljk, lda, 1.0, Aij, lda);
 
 				// Banish upper part of A_{ii}
 				if (i==j)
@@ -189,6 +191,7 @@ int main(const int argc, const char **argv)
 			}
 		}
 	}
+	/////////////////////////////////////////////////////////
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 
@@ -224,6 +227,7 @@ int main(const int argc, const char **argv)
 
 	delete [] A;
 	delete [] DD;
+	delete [] WD;
 	delete [] LD;
 
 	return EXIT_SUCCESS;
