@@ -19,9 +19,10 @@ using namespace std;
 // Generate random LOWER matrix
 void Gen_rand_lower_mat(const int m, const int n, double* A)
 {
-//	srand(time(NULL));
-	srand(20200314);
+	srand(time(NULL));
+//	srand(20200314);
 
+	#pragma omp parallel for
 	for (int i=0; i<m; i++)
 		for (int j=0; j<n; j++)
 			if (i >= j)
@@ -87,6 +88,9 @@ int main(const int argc, const char **argv)
 	double* LD = new double [b*m];   // LD_k = L_{ik}*D_{kk}
 	const int ldd = b;               // Leading dimension of LD
 
+	int* P = new int [p*p];          // Progress table
+	const int ldp = p;
+
 	for (int i=0; i<b*m; i++)        // Zero initialize of WD
 		WD[i] = 0.0;
 
@@ -109,88 +113,108 @@ int main(const int argc, const char **argv)
 	#endif
 	////////// Debug mode //////////
 
-	#ifdef trace
-	trace_label("Red", "DSYTRF");
-	trace_label("Green", "DTRSM");
-	trace_label("Bule", "DGEMM");
-	#endif
-
 	double timer = omp_get_wtime();    // Timer start
 
 	/////////////////////////////////////////////////////////
-	for (int k=0; k<p; k++)
+	#pragma omp parallel
 	{
-		int kb = min(m-k*b,b);
-
-		#ifdef trace
-		trace_cpu_start();
-		#endif
-
-		double* Akk = A+((k*b)+(k*b)*lda);   // Akk: Top address of A_{kk}
-
-		// DSYTRF
-		dsytrf(kb,lda,Akk);
-
-		#ifdef TRACE
-		trace_cpu_stop("Red");
-		#endif
-
-		double* Dk = DD+k*ldd;
-		for (int i=0; i<kb; i++)     // Dk: diagnal elements of D_{kk}
-			Dk[i] = Akk[i+i*lda];
-
-		double* Wkk = WD+(k*ldd);    // Wkk: Top address of L_{kk} * D_{kk}
-		for (int j=0; j<kb; j++)
-			for (int i=j; i<kb; i++)
-				Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Akk[i+j*lda];
-
-		for (int i=k+1; i<p; i++)
+		#pragma omp single
 		{
-			int ib = min(m-i*b,b);
-
-			#ifdef TRACE
-			#endif
-
-			// Updatre A_{ik}
-			double *Aik = A+((i*b)+(k*b)*lda);
-			cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
-						ib, kb, 1.0, Wkk, ldd, Aik, lda);
-
-			#ifdef TRACE
-			#endif
-
-			// LD_k = L_{ik}*D_{kk}
-			double* LDk = LD+(k*ldd);
-			for (int l=0; l<kb; l++)
+			for (int k=0; k<p; k++)
 			{
-				cblas_dcopy(ib, Aik+l*lda, 1, LDk+l*ldd, 1);
-				cblas_dscal(ib, DD[l+k*ldd], LDk+l*ldd, 1);
-			}
+				int kb = min(m-k*b,b);
+				double* Akk = A+((k*b)+(k*b)*lda);   // Akk: Top address of A_{kk}
+				double* Dk = DD+k*ldd;               // Dk: diagnal elements of D_{kk}
+				double* Wkk = WD+(k*ldd);            // Wkk: Top address of L_{kk} * D_{kk}
 
-			for (int j=k+1; j<=i; j++)
-			{
-				int jb = min(m-j*b,b);
+				#pragma omp task \
+					depend(inout: P[k+k*ldp]) \
+					depend(out: DD[k*ldd:kb], WD[k*ldd:kb*kb])
+				{
+					#ifdef TRACE
+					trace_cpu_start();
+					trace_label("Red", "DSYTRF");
+					#endif
 
-				#ifdef TRACE
-				#endif
+					dsytrf(kb,lda,Akk);         // DSYTRF
 
-				// Update A_{ij}
-				double *Aij = A+((i*b)+(j*b)*lda);
-				double *Ljk = A+((j*b)+(k*b)*lda);
-				cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-						ib, jb, kb, -1.0, LD+k*ldd, ldd, Ljk, lda, 1.0, Aij, lda);
+					for (int i=0; i<kb; i++)    // Set Dk
+						Dk[i] = Akk[i+i*lda];
 
-				// Banish upper part of A_{ii}
-				if (i==j)
-					for (int ii=0; ii<ib; ii++)
-						for (int jj=ii+1; jj<jb; jj++)
-							Aij[ii+jj*lda] = 0.0;
+					for (int j=0; j<kb; j++)    // Set Wkk
+						for (int i=j; i<kb; i++)
+							Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Akk[i+j*lda];
 
-				#ifdef TRACE
-				#endif
-			}
-		}
-	}
+					#ifdef TRACE
+					trace_cpu_stop("Red");
+					#endif
+				}
+
+				for (int i=k+1; i<p; i++)
+				{
+					int ib = min(m-i*b,b);
+					double* Aik = A+((i*b)+(k*b)*lda);  // Aik: Top address of A_{ik}
+					double* LDk = LD+(k*ldd);           // LDk:
+
+					#pragma omp task \
+						depend(in: DD[k*ldd:kb], WD[k*ldd:kb*kb]) \
+						depend(inout: P[i+k*ldp]) \
+						depend(out: LD[k*ldd:kb*kb])
+					{
+						#ifdef TRACE
+						trace_cpu_start();
+						trace_label("Green", "DTRSM");
+						#endif
+
+						// Updatre A_{ik}
+						cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
+									ib, kb, 1.0, Wkk, ldd, Aik, lda);
+
+						for (int l=0; l<kb; l++)       // LD_k = L_{ik}*D_{kk}
+						{
+							cblas_dcopy(ib, Aik+l*lda, 1, LDk+l*ldd, 1);
+							cblas_dscal(ib, DD[l+k*ldd], LDk+l*ldd, 1);
+						}
+
+						#ifdef TRACE
+						trace_cpu_stop("Green");
+						#endif
+					}
+
+					for (int j=k+1; j<=i; j++)
+					{
+						int jb = min(m-j*b,b);
+						double *Aij = A+((i*b)+(j*b)*lda);
+						double *Ljk = A+((j*b)+(k*b)*lda);
+
+						#pragma omp task \
+							depend(in: LD[k*lda:kb*kb], P[j+k*ldp]) \
+							depend(inout: P[i+j*ldp])
+						{
+							#ifdef TRACE
+							trace_cpu_start();
+							trace_label("Blue", "DGEMM");
+							#endif
+
+							// Update A_{ij}
+							cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+									ib, jb, kb, -1.0, LD+k*ldd, ldd, Ljk, lda, 1.0, Aij, lda);
+
+							// Banish upper part of A_{ii}
+							if (i==j)
+								for (int ii=0; ii<ib; ii++)
+									for (int jj=ii+1; jj<jb; jj++)
+										Aij[ii+jj*lda] = 0.0;
+
+							#ifdef TRACE
+							trace_cpu_stop("Blue");
+							#endif
+						}
+					}
+				} // End of i-loop
+			} // End of k-loop
+		} // End of single region
+	} // End of parallel region
 	/////////////////////////////////////////////////////////
 
 	timer = omp_get_wtime() - timer;   // Timer stop
@@ -229,6 +253,7 @@ int main(const int argc, const char **argv)
 	delete [] DD;
 	delete [] WD;
 	delete [] LD;
+	delete [] P;
 
 	return EXIT_SUCCESS;
 }
