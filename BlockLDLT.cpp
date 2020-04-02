@@ -127,11 +127,11 @@ int main(const int argc, const char **argv)
 				int kb = min(m-k*b,b);
 				double* Akk = A+((k*b)+(k*b)*lda);   // Akk: Top address of A_{kk}
 				double* Dk = DD+k*ldd;               // Dk: diagnal elements of D_{kk}
-				double* Wkk = WD+(k*ldd);            // Wkk: Top address of L_{kk} * D_{kk}
+				double* Wkk = WD+(k*ldd*ldd);        // Wkk: Top address of L_{kk} * D_{kk}
 
 				#pragma omp task \
 					depend(inout: P[k+k*ldp]) \
-					depend(out: DD[k*ldd:kb], WD[k*ldd:kb*kb])
+					depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
 				{
 					#ifdef TRACE
 					trace_cpu_start();
@@ -156,12 +156,12 @@ int main(const int argc, const char **argv)
 				{
 					int ib = min(m-i*b,b);
 					double* Aik = A+((i*b)+(k*b)*lda);  // Aik: Top address of A_{ik}
-					double* LDk = LD+(k*ldd);           // LDk:
+					double* LDk = LD+(k*ldd*ldd);       // LDk:
 
 					#pragma omp task \
-						depend(in: DD[k*ldd:kb], WD[k*ldd:kb*kb]) \
+						depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
 						depend(inout: P[i+k*ldp]) \
-						depend(out: LD[k*ldd:kb*kb])
+						depend(out: LD[k*ldd*ldd:kb*kb])
 					{
 						#ifdef TRACE
 						trace_cpu_start();
@@ -190,17 +190,22 @@ int main(const int argc, const char **argv)
 						double *Ljk = A+((j*b)+(k*b)*lda);
 
 						#pragma omp task \
-							depend(in: LD[k*lda:kb*kb], P[j+k*ldp]) \
+							depend(in: LD[k*ldd*ldd:kb*kb], P[j+k*ldp]) \
 							depend(inout: P[i+j*ldp])
 						{
 							#ifdef TRACE
-							trace_cpu_start();
-							trace_label("Blue", "DGEMM");
+							if (i==j) {
+								trace_cpu_start();
+								trace_label("Cyan", "DSYDRK");
+							} else {
+								trace_cpu_start();
+								trace_label("Blue", "DGEMDM");
+							}
 							#endif
 
 							// Update A_{ij}
 							cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-									ib, jb, kb, -1.0, LD+k*ldd, ldd, Ljk, lda, 1.0, Aij, lda);
+									ib, jb, kb, -1.0, LDk, ldd, Ljk, lda, 1.0, Aij, lda);
 
 							// Banish upper part of A_{ii}
 							if (i==j)
@@ -209,7 +214,10 @@ int main(const int argc, const char **argv)
 										Aij[ii+jj*lda] = 0.0;
 
 							#ifdef TRACE
-							trace_cpu_stop("Blue");
+							if (i==j)
+								trace_cpu_stop("Cyan");
+							else
+								trace_cpu_stop("Blue");
 							#endif
 						}
 					}
