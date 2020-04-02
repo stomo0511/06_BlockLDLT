@@ -22,7 +22,7 @@ void Gen_rand_lower_mat(const int m, const int n, double* A)
 //	srand(time(NULL));
 	srand(20200314);
 
-	#pragma omp parallel for
+//	#pragma omp parallel for
 	for (int i=0; i<m; i++)
 		for (int j=0; j<n; j++)
 			if (i >= j)
@@ -112,6 +112,8 @@ int main(const int argc, const char **argv)
 		L[i+i*m] = 1.0;
 	#endif
 	////////// Debug mode //////////
+
+//	Show_mat(m,m,A);
 
 	double timer = omp_get_wtime();    // Timer start
 
@@ -221,7 +223,7 @@ int main(const int argc, const char **argv)
 
 	cout << m << ", " << timer << endl;
 
-	Show_mat(m,m,A);
+//	Show_mat(m,m,A);
 
 	////////// Debug mode //////////
 	#ifdef DEBUG
