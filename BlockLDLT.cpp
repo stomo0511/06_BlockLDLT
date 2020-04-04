@@ -115,7 +115,7 @@ int main(const int argc, const char **argv)
 
 //	Show_mat(m,m,A);
 
-	double timer = omp_get_wtime();    // Timer start
+	double timer = omp_get_wtime();  // Timer start
 
 	/////////////////////////////////////////////////////////
 	#pragma omp parallel
@@ -227,8 +227,7 @@ int main(const int argc, const char **argv)
 	} // End of parallel region
 	/////////////////////////////////////////////////////////
 
-	timer = omp_get_wtime() - timer;   // Timer stop
-
+	timer = omp_get_wtime() - timer; // Timer stop
 	cout << m << ", " << timer << endl;
 
 //	Show_mat(m,m,A);
