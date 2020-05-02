@@ -138,7 +138,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Debug mode
-#define DEBUG
+// #define DEBUG
 
 // Trace mode
 //#define TRACE
@@ -176,15 +176,12 @@ int main(const int argc, const char **argv)
     /////////////////////////////////////////////////////////
 
     Gen_rand_lower_mat(m,m,A);         // Randomize elements of orig. matrix
-
     // cout << "A = \n";
     // Show_mat(m,m,A);
 
-    double ctimer = omp_get_wtime();   // Timer start
-    cm2ccrb(m, m, b, b, A, B);         // Change data layout
-    ctimer = omp_get_wtime() - ctimer; // Timer stop
-    cout << m << ", " << ctimer << endl;
+    double timer = omp_get_wtime();   // Timer start
 
+    cm2ccrb(m, m, b, b, A, B);         // Change data layout
     // cout << "B = \n";
     // Show_tilemat(m,m,b,b,B);
 
@@ -204,8 +201,6 @@ int main(const int argc, const char **argv)
         L[i+i*m] = 1.0;
     #endif
     /////////////////////////////////////////////////////////
-
-    double timer = omp_get_wtime();  // Timer start
 
     /////////////////////////////////////////////////////////
     #pragma omp parallel
@@ -329,16 +324,13 @@ int main(const int argc, const char **argv)
     } // End of parallel region
     /////////////////////////////////////////////////////////
 
-    timer = omp_get_wtime() - timer; // Timer stop
-    cout << m << ", " << timer << endl;
-
     // cout << "Result: \n";
     // Show_tilemat(m,m,b,b,B);
 
-    ctimer = omp_get_wtime();   // Timer start
     ccrb2cm(m,m,b,b,B,A);
-    ctimer = omp_get_wtime() - ctimer; // Timer stop
-    cout << m << ", " << ctimer << endl;
+
+    timer = omp_get_wtime() - timer; // Timer stop
+    cout << m << ", " << timer << endl;
 
    /////////////////////////////////////////////////////////
     #ifdef DEBUG
