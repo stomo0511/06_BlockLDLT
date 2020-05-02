@@ -172,8 +172,6 @@ int main(const int argc, const char **argv)
     /////////////////////////////////////////////////////////
 
     Gen_rand_lower_mat(m,m,A);         // Randomize elements of orig. matrix
-    // cout << "A = \n";
-    // Show_mat(m,m,A);
 
     /////////////////////////////////////////////////////////
     #ifdef DEBUG
@@ -194,10 +192,6 @@ int main(const int argc, const char **argv)
 
     double timer = omp_get_wtime();   // Timer start
 
-    // cm2ccrb(m, m, b, b, A, B);         // Change data layout
-    // cout << "B = \n";
-    // Show_tilemat(m,m,b,b,B);
-
     /////////////////////////////////////////////////////////
     #pragma omp parallel
     {
@@ -213,7 +207,7 @@ int main(const int argc, const char **argv)
                     double* Aij = A+((i*b)+(j*b)*m);
                     double* Bij = B+((i*b*b)+(j*b*m));
 
-                    #pragma omp task depend(in: Aij[0:jb*m]) depend(out: Bij[0:ib*jb])
+                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
                     {
                         #ifdef TRACE
                         trace_cpu_start();
@@ -243,10 +237,8 @@ int main(const int argc, const char **argv)
                     depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
                 {
                     #ifdef TRACE
-                    {
-                        trace_cpu_start();
-                        trace_label("Red", "DSYTRF");
-                    }
+                    trace_cpu_start();
+                    trace_label("Red", "DSYTRF");
                     #endif
 
                     dsytrf(kb,kb,Bkk);          // DSYTRF
@@ -259,9 +251,7 @@ int main(const int argc, const char **argv)
                             Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Bkk[i+j*kb];
 
                     #ifdef TRACE
-                    {
-                        trace_cpu_stop("Red");
-                    }
+                    trace_cpu_stop("Red");
                     #endif
                 }
 
@@ -355,7 +345,7 @@ int main(const int argc, const char **argv)
                     double* Aij = A+((i*b)+(j*b)*m);
                     double* Bij = B+((i*b*b)+(j*b*m));
 
-                    #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:jb*m])
+                    #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
                     {
                         #ifdef TRACE
                         trace_cpu_start();
@@ -375,11 +365,6 @@ int main(const int argc, const char **argv)
         } // End of single region
     } // End of parallel region
     /////////////////////////////////////////////////////////
-
-    // cout << "Result: \n";
-    // Show_tilemat(m,m,b,b,B);
-
-    // ccrb2cm(m,m,b,b,B,A);
 
     timer = omp_get_wtime() - timer; // Timer stop
     cout << m << ", " << timer << endl;
