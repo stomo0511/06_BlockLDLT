@@ -79,14 +79,12 @@ void cm2ccrb(const int m, const int n, const int mb, const int nb, double* A, do
         for (int i=0; i<p; i++)
         {
             int ib = min(m-i*mb,mb);
+            double* Aij = A+((i*mb)+(j*nb)*m);
+            double* Bij = B+((i*mb*nb)+(j*nb*m));
 
             for (int jj=0; jj<jb; jj++)
                 for (int ii=0; ii<ib; ii++)
-                {
-                    double* Aij = A+((i*mb)+(j*nb)*m);
-                    double* Bij = B+((i*mb*nb)+(j*nb*m));
-                    B[ i*mb*nb + j*nb*m + ii+jj*ib ] = Aij[ ii+jj*m ];
-                }
+                    Bij[ ii+jj*ib ] = Aij[ ii+jj*m ];
         }
     }
 }
@@ -104,14 +102,12 @@ void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, do
         for (int i=0; i<p; i++)
         {
             int ib = min(m-i*mb,mb);
+            double* Aij = A+((i*mb)+(j*nb)*m);
+            double* Bij = B+((i*mb*nb)+(j*nb*m));
 
             for (int jj=0; jj<jb; jj++)
                 for (int ii=0; ii<ib; ii++)
-                {
-                    double* Aij = A+((i*mb)+(j*nb)*m);
-                    double* Bij = B+((i*mb*nb)+(j*nb*m));
-                    Aij[ ii+jj*m ] = B[ i*mb*nb + j*nb*m + ii+jj*ib ];
-                }
+                    Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
         }
     }
 }
@@ -141,7 +137,7 @@ void dsytrf(const int m, const int lda, double* A)
 // #define DEBUG
 
 // Trace mode
-//#define TRACE
+// #define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -179,12 +175,6 @@ int main(const int argc, const char **argv)
     // cout << "A = \n";
     // Show_mat(m,m,A);
 
-    double timer = omp_get_wtime();   // Timer start
-
-    cm2ccrb(m, m, b, b, A, B);         // Change data layout
-    // cout << "B = \n";
-    // Show_tilemat(m,m,b,b,B);
-
     /////////////////////////////////////////////////////////
     #ifdef DEBUG
     double *OA = new double[m*m];    // OA: copy of A
@@ -202,11 +192,45 @@ int main(const int argc, const char **argv)
     #endif
     /////////////////////////////////////////////////////////
 
+    double timer = omp_get_wtime();   // Timer start
+
+    // cm2ccrb(m, m, b, b, A, B);         // Change data layout
+    // cout << "B = \n";
+    // Show_tilemat(m,m,b,b,B);
+
     /////////////////////////////////////////////////////////
     #pragma omp parallel
     {
         #pragma omp single
         {
+            // Convert CM to CCRB
+            for (int j=0; j<p; j++)
+            {
+                int jb = min(m-j*b,b);
+                for (int i=0; i<p; i++)
+                {
+                    int ib = min(m-i*b,b);
+                    double* Aij = A+((i*b)+(j*b)*m);
+                    double* Bij = B+((i*b*b)+(j*b*m));
+
+                    #pragma omp task depend(in: Aij[0:jb*m]) depend(out: Bij[0:ib*jb])
+                    {
+                        #ifdef TRACE
+                        trace_cpu_start();
+                        trace_label("Yellow", "Conv.");
+                        #endif
+
+                        for (int jj=0; jj<jb; jj++)
+                            for (int ii=0; ii<ib; ii++)
+                                Bij[ ii+jj*ib ] = Aij[ ii+jj*m ];
+
+                        #ifdef TRACE
+                        trace_cpu_stop("Yellow");
+                        #endif
+                    }
+                }
+            }
+
             for (int k=0; k<p; k++)
             {
                 int kb = min(m-k*b,b);
@@ -320,6 +344,34 @@ int main(const int argc, const char **argv)
                     }
                 } // End of i-loop
             } // End of k-loop
+
+            // Convert CCRB to CM
+            for (int j=0; j<p; j++)
+            {
+                int jb = min(m-j*b,b);
+                for (int i=0; i<p; i++)
+                {
+                    int ib = min(m-i*b,b);
+                    double* Aij = A+((i*b)+(j*b)*m);
+                    double* Bij = B+((i*b*b)+(j*b*m));
+
+                    #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:jb*m])
+                    {
+                        #ifdef TRACE
+                        trace_cpu_start();
+                        trace_label("Violet", "Conv.");
+                        #endif
+
+                        for (int jj=0; jj<jb; jj++)
+                            for (int ii=0; ii<ib; ii++)
+                                Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
+                        
+                        #ifdef TRACE
+                        trace_cpu_stop("Violet");
+                        #endif
+                    }
+                }
+            }
         } // End of single region
     } // End of parallel region
     /////////////////////////////////////////////////////////
@@ -327,7 +379,7 @@ int main(const int argc, const char **argv)
     // cout << "Result: \n";
     // Show_tilemat(m,m,b,b,B);
 
-    ccrb2cm(m,m,b,b,B,A);
+    // ccrb2cm(m,m,b,b,B,A);
 
     timer = omp_get_wtime() - timer; // Timer stop
     cout << m << ", " << timer << endl;
