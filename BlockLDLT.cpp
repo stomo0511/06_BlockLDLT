@@ -207,7 +207,7 @@ int main(const int argc, const char **argv)
                     double* Aij = A+((i*b)+(j*b)*m);
                     double* Bij = B+((i*b*b)+(j*b*m));
 
-                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb]) priority(max(2,p-min(i,j)-1))
+                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb]) priority(0)
                     {
                         #ifdef TRACE
                         trace_cpu_start();
@@ -234,7 +234,7 @@ int main(const int argc, const char **argv)
 
                 #pragma omp task \
                     depend(inout: Bkk[0:kb*kb]) \
-                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) priority(p)
+                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) priority(p-k)
                 {
                     #ifdef TRACE
                     trace_cpu_start();
@@ -264,7 +264,7 @@ int main(const int argc, const char **argv)
                     #pragma omp task \
                         depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
                         depend(inout: Bik[0:ib*kb]) \
-                        depend(out: LD[k*ldd*ldd:kb*kb]) priority(max(5,p-i-2))
+                        depend(out: LD[k*ldd*ldd:kb*kb]) priority(p-k-1)
                     {
                         #ifdef TRACE
                         {
@@ -298,7 +298,7 @@ int main(const int argc, const char **argv)
 
                         #pragma omp task \
                             depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
-                            depend(inout: Bij[0:ib*jb])priority(max(5,p-min(i,j)-3))
+                            depend(inout: Bij[0:ib*jb]) priority(p-k-2)
                         {
                             #ifdef TRACE
                             {
