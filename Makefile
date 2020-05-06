@@ -21,8 +21,8 @@ MKL_INC_DIR = $(MKL_ROOT)/include
 #MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core 
 MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
 
-OBJS =	BlockLDLT.o
-#OBJS =	BlockLDLT.o trace.o
+# OBJS =	BlockLDLT.o
+OBJS =	BlockLDLT.o trace.o
 
 TARGET = BlockLDLT
 

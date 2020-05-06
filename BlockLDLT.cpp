@@ -137,7 +137,7 @@ void dsytrf(const int m, const int lda, double* A)
 // #define DEBUG
 
 // Trace mode
-// #define TRACE
+#define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -201,13 +201,13 @@ int main(const int argc, const char **argv)
             for (int j=0; j<p; j++)
             {
                 int jb = min(m-j*b,b);
-                for (int i=0; i<p; i++)
+                for (int i=j; i<p; i++)
                 {
                     int ib = min(m-i*b,b);
                     double* Aij = A+((i*b)+(j*b)*m);
                     double* Bij = B+((i*b*b)+(j*b*m));
 
-                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
+                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb]) priority(max(2,p-min(i,j)-1))
                     {
                         #ifdef TRACE
                         trace_cpu_start();
@@ -234,7 +234,7 @@ int main(const int argc, const char **argv)
 
                 #pragma omp task \
                     depend(inout: Bkk[0:kb*kb]) \
-                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
+                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) priority(p)
                 {
                     #ifdef TRACE
                     trace_cpu_start();
@@ -264,7 +264,7 @@ int main(const int argc, const char **argv)
                     #pragma omp task \
                         depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
                         depend(inout: Bik[0:ib*kb]) \
-                        depend(out: LD[k*ldd*ldd:kb*kb])
+                        depend(out: LD[k*ldd*ldd:kb*kb]) priority(max(5,p-i-2))
                     {
                         #ifdef TRACE
                         {
@@ -298,7 +298,7 @@ int main(const int argc, const char **argv)
 
                         #pragma omp task \
                             depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
-                            depend(inout: Bij[0:ib*jb])
+                            depend(inout: Bij[0:ib*jb])priority(max(5,p-min(i,j)-3))
                         {
                             #ifdef TRACE
                             {
@@ -339,7 +339,7 @@ int main(const int argc, const char **argv)
             for (int j=0; j<p; j++)
             {
                 int jb = min(m-j*b,b);
-                for (int i=0; i<p; i++)
+                for (int i=j; i<p; i++)
                 {
                     int ib = min(m-i*b,b);
                     double* Aij = A+((i*b)+(j*b)*m);
@@ -369,7 +369,7 @@ int main(const int argc, const char **argv)
     timer = omp_get_wtime() - timer; // Timer stop
     cout << m << ", " << timer << endl;
 
-   /////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////
     #ifdef DEBUG
     // Make L and D
     for (int k=0; k<m; k++)
