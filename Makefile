@@ -31,8 +31,5 @@ $(TARGET):	$(OBJS)
 %.o: %.cpp
 	$(CXX) -c $(CXXFLAGS) -I$(MKL_INC_DIR) -o $@ $<
 
-trace.o: trace.c
-	$(CXX) -O3 -c -o $@ $<
-
 clean:
 	rm -f $(OBJS) $(TARGET)
