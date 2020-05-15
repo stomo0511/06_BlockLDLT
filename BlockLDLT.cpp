@@ -11,8 +11,8 @@ using namespace std;
 // Generate random LOWER matrix
 void Gen_rand_lower_mat(const int m, const int n, double *A)
 {
-//	srand(time(NULL));
-	srand(20200314);
+	srand(time(NULL));
+//	srand(20200314);
 
 	for (int i=0; i<m; i++)
 		for (int j=0; j<n; j++)
@@ -34,7 +34,7 @@ void Show_mat(const int m, const int n, double *A)
 }
 
 // Debug mode
-// #define DEBUG
+#define DEBUG
 
 int main(const int argc, const char **argv)
 {
