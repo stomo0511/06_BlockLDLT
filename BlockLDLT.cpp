@@ -124,7 +124,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Debug mode
-// #define DEBUG
+#define DEBUG
 
 // Apply iterative refinement
 #define ITREF
@@ -365,30 +365,69 @@ int main(const int argc, const char **argv)
 
     /////////////////////////////////////////////////////////
     #ifdef DEBUG
-    // Make L and D
-    for (int k=0; k<m; k++)
-    {
-        D[k + k*lda] = A[k + k*lda];
-        for (int i=k+1; i<m; i++)
-            L[i + k*lda] = A[i + k*lda];
-    }
+	cout << "Debug mode: \n";
 
-    double* W = new double[m*m];
-    // W <- L*D
-    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-                m, m, m, 1.0, L, lda, D, m, 0.0, W, m);
-    // OA <- W*L^T - OA
-    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-                m, m, m, -1.0, W, lda, L, m, 1.0, OA, m);
-    delete [] W;
+	double* b = new double [m];        // RHS vector
+	double* x = new double [m];        // Solution vector
+	for (int i=0; i<m; i++)
+		b[i] = x[i] = 1.0;
+	
+	timer = omp_get_wtime();    // Timer start
 
-    cout << "Debug mode: \n";
-    cout << "|| A - L*D*L^T ||_2 = " << cblas_dnrm2(m*m, OA, 1) << endl;
+	// Solve L*x = b for x
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
 
-    delete [] OA;
-    delete [] D;
-    delete [] L;
-    #endif
+	// x := D^{-1} x
+	for (int i=0; i<m; i++)
+		x[i] /= A[i+i*lda];
+	
+	// Solbe L^{T}*y = x for y(x)
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
+
+	timer = omp_get_wtime() - timer;   // Timer stop
+	cout << m << ", " << timer << endl;
+
+	// b := b - A*x
+	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
+	cout << "No piv LDLT:    || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+
+	////////// Iterative refinement //////////
+	#ifdef ITREF
+	double* r = new double [m];       // Residure vector
+	cblas_dcopy(m,b,1,r,1);
+	for (int i=0; i<m; i++)
+		b[i] = 1.0;
+
+	timer = omp_get_wtime();    // Timer start
+
+	// Solve L*y = r for y(r)
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, m, 1, 1.0, A, lda, r, lda);
+
+	// r := D^{-1} r
+	for (int i=0; i<m; i++)
+		r[i] /= A[i+i*lda];
+	
+	// Solbe L^{T}*y = r for y(r)
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, m, 1, 1.0, A, lda, r, lda);
+
+	// x := x+r
+	cblas_daxpy(m,1.0,r,1,x,1);
+
+	timer = omp_get_wtime() - timer;   // Timer stop
+	cout << m << ", " << timer << endl;
+
+	// b := b - A*x
+	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
+	cout << "Apply 1 it ref: || b - A*xA ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+
+	delete [] r;
+	#endif
+	////////// Iterative refinement //////////
+
+	delete [] OA;
+	delete [] b;
+	delete [] x;
+	#endif
     /////////////////////////////////////////////////////////
 
     delete [] A;
