@@ -207,7 +207,17 @@ int main(const int argc, const char **argv)
                     }
                 }
             }
+		}
+	}
 
+	timer = omp_get_wtime() - timer; // Timer stop
+    cout << m << ", " << timer << endl;
+	timer = omp_get_wtime();   // Timer start
+
+  	#pragma omp parallel
+    {
+        #pragma omp single
+        {
 			// Blocked LDLT part start
             for (int k=0; k<p; k++)
             {
@@ -321,7 +331,17 @@ int main(const int argc, const char **argv)
                     }
                 } // End of i-loop
             } // End of k-loop
+		}
+	}
 
+	timer = omp_get_wtime() - timer; // Timer stop
+    cout << m << ", " << timer << endl;
+	timer = omp_get_wtime();   // Timer start
+
+	#pragma omp parallel
+    {
+		#pragma omp single
+        {
             // Convert CCRB to CM
             for (int j=0; j<p; j++)
             {
