@@ -1,11 +1,3 @@
-//============================================================================
-// Name        : BlockLDLT.cpp
-// Author      : Tomohiro Suzuki
-// Version     :
-// Copyright   : Your copyright notice
-// Description : Hello World in C, Ansi-style
-//============================================================================
-
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>
@@ -116,7 +108,6 @@ void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, do
 void dsytrf(const int m, const int lda, double* A)
 {
     double* v = new double [m];
-
     for (int k=0; k<m; k++)
     {
         for (int i=0; i<k; i++)
@@ -129,15 +120,17 @@ void dsytrf(const int m, const int lda, double* A)
                     m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
         cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
     }
-
     delete [] v;
 }
 
 // Debug mode
 // #define DEBUG
 
+// Apply iterative refinement
+#define ITREF
+
 // Trace mode
-#define TRACE
+// #define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -148,26 +141,26 @@ extern void trace_label(const char *color, const char *label);
 int main(const int argc, const char **argv)
 {
     // Usage "a.out [size of matrix: m ] [tile size: b]"
-    if (argc < 3)
+    if (argc < 2)
     {
         cerr << "usage: a.out[size of matrix: m ] [tile size: b]\n";
         return EXIT_FAILURE;
     }
 
     const int m = atoi(argv[1]);       // # rows and columns <- square matrix
-    const int b = atoi(argv[2]);       // tile size
-    const int p =  (m % b == 0) ? m/b : m/b+1;   // # tiles
+    const int nb = atoi(argv[2]);      // tile size
+    const int p =  (m % nb == 0) ? m/nb : m/nb+1;   // # tiles
 
     double* A = new double [m*m];      // Original matrix
     double* B = new double [m*m];      // Tiled matrix
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* WD = new double [b*m];     // WD_k = L_{kk}*D_{kk}
-    double* LD = new double [b*m];     // LD_k = L_{ik}*D_{kk}
-    const int ldd = b;                 // Leading dimension of LD and WD
+    double* WD = new double [nb*m];    // WD_k = L_{kk}*D_{kk}
+    double* LD = new double [nb*m];    // LD_k = L_{ik}*D_{kk}
+    const int ldd = nb;                // Leading dimension of LD and WD
 
-    for (int i=0; i<b*m; i++)          // Initialize WD to zero
+    for (int i=0; i<nb*m; i++)         // Initialize WD to zero
         WD[i] = 0.0;
     /////////////////////////////////////////////////////////
 
@@ -200,12 +193,12 @@ int main(const int argc, const char **argv)
             // Convert CM to CCRB
             for (int j=0; j<p; j++)
             {
-                int jb = min(m-j*b,b);
+                int jb = min(m-j*nb,nb);
                 for (int i=j; i<p; i++)
                 {
-                    int ib = min(m-i*b,b);
-                    double* Aij = A+((i*b)+(j*b)*m);
-                    double* Bij = B+((i*b*b)+(j*b*m));
+                    int ib = min(m-i*nb,nb);
+                    double* Aij = A+((i*nb)+(j*nb)*m);
+                    double* Bij = B+((i*nb*nb)+(j*nb*m));
 
                     #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb]) priority(0)
                     {
@@ -225,12 +218,13 @@ int main(const int argc, const char **argv)
                 }
             }
 
+			// Blocked LDLT part start
             for (int k=0; k<p; k++)
             {
-                int kb = min(m-k*b,b);
-                double* Bkk = B+((k*b*b)+(k*b)*lda); // Bkk: Top address of B_{kk}
-                double* Dk = DD+k*ldd;               // Dk: diagnal elements of D_{kk}
-                double* Wkk = WD+(k*ldd*ldd);        // Wkk: Top address of L_{kk} * D_{kk}
+                int kb = min(m-k*nb,nb);
+                double* Bkk = B+((k*nb*nb)+(k*nb)*lda); // Bkk: Top address of B_{kk}
+                double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
+                double* Wkk = WD+(k*ldd*ldd);           // Wkk: Top address of L_{kk} * D_{kk}
 
                 #pragma omp task \
                     depend(inout: Bkk[0:kb*kb]) \
@@ -257,9 +251,9 @@ int main(const int argc, const char **argv)
 
                 for (int i=k+1; i<p; i++)
                 {
-                    int ib = min(m-i*b,b);
-                    double* Bik = B+((i*b*b)+(k*b)*lda); // Bik: Top address of B_{ik}
-                    double* LDk = LD+(k*ldd*ldd);        // LDk:
+                    int ib = min(m-i*nb,nb);
+                    double* Bik = B+((i*nb*nb)+(k*nb)*lda); // Bik: Top address of B_{ik}
+                    double* LDk = LD+(k*ldd*ldd);           // LDk:
 
                     #pragma omp task \
                         depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
@@ -292,9 +286,9 @@ int main(const int argc, const char **argv)
 
                     for (int j=k+1; j<=i; j++)
                     {
-                        int jb = min(m-j*b,b);
-                        double *Bij = B+((i*b*b)+(j*b)*lda);
-                        double *Ljk = B+((j*b*b)+(k*b)*lda);
+                        int jb = min(m-j*nb,nb);
+                        double *Bij = B+((i*nb*nb)+(j*nb)*lda);
+                        double *Ljk = B+((j*nb*nb)+(k*nb)*lda);
 
                         #pragma omp task \
                             depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
@@ -338,12 +332,12 @@ int main(const int argc, const char **argv)
             // Convert CCRB to CM
             for (int j=0; j<p; j++)
             {
-                int jb = min(m-j*b,b);
+                int jb = min(m-j*nb,nb);
                 for (int i=j; i<p; i++)
                 {
-                    int ib = min(m-i*b,b);
-                    double* Aij = A+((i*b)+(j*b)*m);
-                    double* Bij = B+((i*b*b)+(j*b*m));
+                    int ib = min(m-i*nb,nb);
+                    double* Aij = A+((i*nb)+(j*nb)*m);
+                    double* Bij = B+((i*nb*nb)+(j*nb*m));
 
                     #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
                     {
