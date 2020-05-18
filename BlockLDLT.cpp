@@ -170,16 +170,6 @@ int main(const int argc, const char **argv)
     #ifdef DEBUG
     double *OA = new double[m*m];    // OA: copy of A
     cblas_dcopy(m*m, A, 1, OA, 1);
-    for (int i=0; i<m; i++)
-        for (int j=0; j<=i; j++)
-            OA[j+i*m] = OA[i+j*m];   // Fill the upper triangular part
-
-    double *D = new double[m*m];
-    double *L = new double[m*m];
-    for (int i=0; i<m*m; i++)        // Initialize D and L
-        D[i] = L[i] = 0.0;
-    for (int i=0; i<m; i++)
-        L[i+i*m] = 1.0;
     #endif
     /////////////////////////////////////////////////////////
 
@@ -235,6 +225,8 @@ int main(const int argc, const char **argv)
                     trace_label("Red", "DSYTRF");
                     #endif
 
+					///////////////////////////////
+                    // DSYTRF: B_{kk} -> L_{kk}, D_{kk}
                     dsytrf(kb,kb,Bkk);          // DSYTRF
 
                     for (int i=0; i<kb; i++)    // Set Dk
@@ -267,7 +259,8 @@ int main(const int argc, const char **argv)
                         }
                         #endif
 
-                        // Updatre B_{ik}
+						///////////////////////////////
+                        // TRSM: B_{ik} -> L_{ik}
                         cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
                                     ib, kb, 1.0, Wkk, ldd, Bik, ib);
 
@@ -418,7 +411,7 @@ int main(const int argc, const char **argv)
 
 	// b := b - A*x
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-	cout << "Apply 1 it ref: || b - A*xA ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
 
 	delete [] r;
 	#endif
