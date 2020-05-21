@@ -241,7 +241,7 @@ int main(const int argc, const char **argv)
                 for (int i=k+1; i<p; i++)
                 {
                     int ib = min(m-i*nb,nb);
-                    double* Bik = B+(k*nb*lda + i*nb*nb);   // Bik: Top address of B_{ik}
+                    double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
                     double* LDk = LD+(k*ldd*ldd);           // LDk:
 
                     #pragma omp task \
@@ -278,7 +278,7 @@ int main(const int argc, const char **argv)
                     {
                         int jb = min(m-j*nb,nb);
                         double *Bij = B+(j*nb*lda + i*nb*jb);
-                        double *Ljk = B+(k*nb*lda + j*nb*jb);
+                        double *Ljk = B+(k*nb*lda + j*nb*kb);
 
                         #pragma omp task \
                             depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
