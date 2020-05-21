@@ -187,8 +187,8 @@ int main(const int argc, const char **argv)
                 for (int i=j; i<p; i++)
                 {
                     int ib = min(m-i*nb,nb);
-                    double* Aij = A+((i*nb)+(j*nb)*m);
-                    double* Bij = B+((i*nb*nb)+(j*nb*m));
+                    double* Aij = A+((i*nb)+(j*nb*m));
+                    double* Bij = B+((i*nb*jb)+(j*nb*m));
 
                     #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb]) priority(0)
                     {
@@ -349,8 +349,8 @@ int main(const int argc, const char **argv)
                 for (int i=j; i<p; i++)
                 {
                     int ib = min(m-i*nb,nb);
-                    double* Aij = A+((i*nb)+(j*nb)*m);
-                    double* Bij = B+((i*nb*nb)+(j*nb*m));
+                    double* Aij = A+((i*nb)+(j*nb*m));
+                    double* Bij = B+((i*nb*jb)+(j*nb*m));
 
                     #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
                     {
