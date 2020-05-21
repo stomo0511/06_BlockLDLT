@@ -41,21 +41,22 @@ void Show_tilemat(const int m, const int n, const int mb, const int nb, double* 
     const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
     const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
 
-    for (int i=0; i<m; i++)
-    {
-        int ib = min(m-(i/mb)*mb,mb);
-        for (int j=0; j<n; j++)
-        {
-            int ii = i/mb;
-            int jj = j/nb;
-            int ti = i - ii*mb;
-            int tj = j - jj*nb;
-            
-            printf("% 6.4lf, ",A[ii*(mb*nb) + jj*(m*nb) + ti + tj*ib]);
-        }
-        cout << endl;
-    }
-    cout << endl;
+	for (int i=0; i<m; i++)
+	{
+		int ii = i/mb;
+		int ib = min(m-ii*mb,mb);
+		int ti = i - ii*mb;
+		for (int j=0; j<n; j++)
+		{
+			int jj = j/nb;
+			int jb = min(n-jj*nb,nb);
+			int tj = j - jj*nb;
+			
+			printf("% 6.4lf, ",A[m*jj*nb + ii*mb*jb +  + ti + tj*ib]);
+		}
+		cout << endl;
+	}
+	cout << endl;
 }
 
 void cm2ccrb(const int m, const int n, const int mb, const int nb, double* A, double* B)
@@ -63,22 +64,20 @@ void cm2ccrb(const int m, const int n, const int mb, const int nb, double* A, do
     const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
     const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
 
-    #pragma omp parallel for
-    for (int j=0; j<q; j++)
-    {
-        int jb = min(n-j*nb,nb);
+	for (int j=0; j<q; j++)
+	{
+		int jb = min(n-j*nb,nb);
+		for (int i=0; i<p; i++)
+		{
+			int ib = min(m-i*mb,mb);
+			double* Aij = A+(j*nb*m + i*mb);
+			double* Bij = B+(j*nb*m + i*mb*jb);
 
-        for (int i=0; i<p; i++)
-        {
-            int ib = min(m-i*mb,mb);
-            double* Aij = A+((i*mb)+(j*nb*m));
-            double* Bij = B+((i*mb*jb)+(j*nb*m));
-
-            for (int jj=0; jj<jb; jj++)
-                for (int ii=0; ii<ib; ii++)
-                    Bij[ ii+jj*ib ] = Aij[ ii+jj*m ];
-        }
-    }
+			for (int jj=0; jj<jb; jj++)
+				for (int ii=0; ii<ib; ii++)
+					Bij[ jj*ib + ii ] = Aij[ jj*m + ii ];
+		}
+	}
 }
 
 void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, double* A)
@@ -86,22 +85,20 @@ void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, do
     const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
     const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
 
-    #pragma omp parallel for
-    for (int j=0; j<q; j++)
-    {
-        int jb = min(m-j*nb,nb);
+	for (int j=0; j<q; j++)
+	{
+		int jb = min(m-j*nb,nb);
+		for (int i=0; i<p; i++)
+		{
+			int ib = min(m-i*mb,mb);
+			double* Aij = A+(j*nb*m + i*mb);
+			double* Bij = B+(j*nb*m + i*mb*jb);
 
-        for (int i=0; i<p; i++)
-        {
-            int ib = min(m-i*mb,mb);
-            double* Aij = A+((i*mb)+(j*nb*m));
-            double* Bij = B+((i*mb*jb)+(j*nb*m));
-
-            for (int jj=0; jj<jb; jj++)
-                for (int ii=0; ii<ib; ii++)
-                    Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
-        }
-    }
+			for (int jj=0; jj<jb; jj++)
+				for (int ii=0; ii<ib; ii++)
+					Aij[ jj*m + ii ] = Bij[ jj*ib + ii ];
+		}
+	}
 }
 
 // Serial LDLT factorization
@@ -187,8 +184,8 @@ int main(const int argc, const char **argv)
                 for (int i=j; i<p; i++)
                 {
                     int ib = min(m-i*nb,nb);
-                    double* Aij = A+((i*nb)+(j*nb*m));
-                    double* Bij = B+((i*nb*jb)+(j*nb*m));
+                   	double* Aij = A+(j*nb*m + i*nb);
+		            double* Bij = B+(j*nb*m + i*nb*jb);
 
                     #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb]) priority(0)
                     {
@@ -222,7 +219,7 @@ int main(const int argc, const char **argv)
             for (int k=0; k<p; k++)
             {
                 int kb = min(m-k*nb,nb);
-                double* Bkk = B+((k*nb*nb)+(k*nb)*lda); // Bkk: Top address of B_{kk}
+                double* Bkk = B+(k*nb*lda + k*nb*kb);   // Bkk: Top address of B_{kk}
                 double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
                 double* Wkk = WD+(k*ldd*ldd);           // Wkk: Top address of L_{kk} * D_{kk}
 
@@ -254,7 +251,7 @@ int main(const int argc, const char **argv)
                 for (int i=k+1; i<p; i++)
                 {
                     int ib = min(m-i*nb,nb);
-                    double* Bik = B+((i*nb*nb)+(k*nb)*lda); // Bik: Top address of B_{ik}
+                    double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
                     double* LDk = LD+(k*ldd*ldd);           // LDk:
 
                     #pragma omp task \
@@ -290,8 +287,8 @@ int main(const int argc, const char **argv)
                     for (int j=k+1; j<=i; j++)
                     {
                         int jb = min(m-j*nb,nb);
-                        double *Bij = B+((i*nb*nb)+(j*nb)*lda);
-                        double *Ljk = B+((j*nb*nb)+(k*nb)*lda);
+                        double *Bij = B+(j*nb*lda + i*nb*jb);
+                        double *Ljk = B+(k*nb*lda + j*nb*kb);
 
                         #pragma omp task \
                             depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
