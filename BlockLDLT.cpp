@@ -71,8 +71,8 @@ void cm2ccrb(const int m, const int n, const int mb, const int nb, double* A, do
         for (int i=0; i<p; i++)
         {
             int ib = min(m-i*mb,mb);
-            double* Aij = A+((i*mb)+(j*nb)*m);
-            double* Bij = B+((i*mb*nb)+(j*nb*m));
+            double* Aij = A+((i*mb)+(j*nb*m));
+            double* Bij = B+((i*mb*jb)+(j*nb*m));
 
             for (int jj=0; jj<jb; jj++)
                 for (int ii=0; ii<ib; ii++)
@@ -94,8 +94,8 @@ void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, do
         for (int i=0; i<p; i++)
         {
             int ib = min(m-i*mb,mb);
-            double* Aij = A+((i*mb)+(j*nb)*m);
-            double* Bij = B+((i*mb*nb)+(j*nb*m));
+            double* Aij = A+((i*mb)+(j*nb*m));
+            double* Bij = B+((i*mb*jb)+(j*nb*m));
 
             for (int jj=0; jj<jb; jj++)
                 for (int ii=0; ii<ib; ii++)
