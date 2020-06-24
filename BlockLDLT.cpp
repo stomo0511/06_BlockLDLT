@@ -15,11 +15,8 @@ void Gen_rand_lower_mat(const int m, const int n, double *A)
 //	srand(20200314);
 
 	for (int j=0; j<n; j++)
-		for (int i=0; i<m; i++)
-			if (i >= j)
+		for (int i=j; i<m; i++)
 				A[i+j*m] = 1.0 - 2*(double)rand() / RAND_MAX;
-			else
-				A[i+j*m] = 0.0;
 }
 
 // Show matrix
@@ -62,11 +59,11 @@ int main(const int argc, const char **argv)
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 
-	cout << m << ", " << timer << endl;
+	cout << m << ", " << timer << ", ";
 
 	////////// Debug mode //////////
 	#ifdef DEBUG
-	cout << "Debug mode: \n";
+	// cout << "Debug mode: \n";
 
 	double* b = new double [m];      // RHS vector
 	double* x = new double [m];      // Solution vector
@@ -77,7 +74,8 @@ int main(const int argc, const char **argv)
 
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
 
-	cout << "|| b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	// cout << "|| b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+    cout << cblas_dnrm2(m, b, 1) << endl;
 
 	delete [] OA;
 	delete [] b;
