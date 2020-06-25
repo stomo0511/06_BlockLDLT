@@ -1,13 +1,16 @@
 #!/bin/bash
 
 
-#mm=(3072 4096 6144 8192 12288 16384 24576 32768)
-mm=(24576)
+mm=(3072 4096 6144 8192 12288 16384 24576 32768)
+bb=(128 256 512)
 
-for i in "${mm[@]}"
+for j in "${bb[@]}"
   do
-    for ((k=0;k<10;k++))
+  for i in "${mm[@]}"
     do
-      ./BlockLDLT $i
+      for ((k=0;k<10;k++))
+      do
+        ./BlockLDLT $i $j
+      done
     done
   done
