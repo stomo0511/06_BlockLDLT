@@ -15,9 +15,11 @@ endif
 
 CXXFLAGS = -m64 -fopenmp -O3
 
-LIBS = -liomp5
+#LIBS = -liomp5
+LIBS = -lgomp
 MKL_INC_DIR = $(MKL_ROOT)/include
-MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
+#MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
+MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core 
 
 OBJS =	BlockLDLT.o
 
