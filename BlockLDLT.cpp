@@ -184,7 +184,7 @@ int main(const int argc, const char **argv)
                     double* Aij = A+(j*nb*m + i*nb);
                     double* Bij = B+(j*nb*m + i*nb*jb);
 
-                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb]) priority(0)
+                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
                     {
                         #ifdef TRACE
                         trace_cpu_start();
@@ -212,7 +212,7 @@ int main(const int argc, const char **argv)
 
                 #pragma omp task \
                     depend(inout: Bkk[0:kb*kb]) \
-                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) priority(p-k)
+                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
                 {
                     #ifdef TRACE
                     trace_cpu_start();
@@ -244,7 +244,7 @@ int main(const int argc, const char **argv)
                     #pragma omp task \
                         depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
                         depend(inout: Bik[0:ib*kb]) \
-                        depend(out: LD[k*ldd*ldd:kb*kb]) priority(p-k-1)
+                        depend(out: LD[k*ldd*ldd:kb*kb])
                     {
                         #ifdef TRACE
                         {
@@ -279,7 +279,7 @@ int main(const int argc, const char **argv)
 
                         #pragma omp task \
                             depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
-                            depend(inout: Bij[0:ib*jb]) priority(p-k-2)
+                            depend(inout: Bij[0:ib*jb])
                         {
                             #ifdef TRACE
                             {
@@ -348,11 +348,11 @@ int main(const int argc, const char **argv)
     /////////////////////////////////////////////////////////
 
     timer = omp_get_wtime() - timer; // Timer stop
-    cout << m << ", " << timer << endl;
+    cout << m << ", " << timer << ", ";
 
     /////////////////////////////////////////////////////////
     #ifdef DEBUG
-	cout << "Debug mode: \n";
+	// cout << "Debug mode: \n";
 
 	double* b = new double [m];        // RHS vector
 	double* x = new double [m];        // Solution vector
@@ -372,11 +372,13 @@ int main(const int argc, const char **argv)
 	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
 
 	timer = omp_get_wtime() - timer;   // Timer stop
-	cout << m << ", " << timer << endl;
+	// cout << m << ", " << timer << endl;
+	cout << timer << ", ";
 
 	// b := b - A*x
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-	cout << "No piv LDLT:    || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	// cout << "No piv LDLT:    || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	cout << cblas_dnrm2(m, b, 1) << ", ";
 
 	////////// Iterative refinement //////////
 	#ifdef ITREF
@@ -401,11 +403,13 @@ int main(const int argc, const char **argv)
 	cblas_daxpy(m,1.0,r,1,x,1);
 
 	timer = omp_get_wtime() - timer;   // Timer stop
-	cout << m << ", " << timer << endl;
+	// cout << m << ", " << timer << endl;
+	cout << timer << ", ";
 
 	// b := b - A*x
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-	cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	// cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	cout << cblas_dnrm2(m, b, 1) << endl;
 
 	delete [] r;
 	#endif
