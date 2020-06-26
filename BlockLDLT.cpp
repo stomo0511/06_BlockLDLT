@@ -15,14 +15,9 @@ void Gen_rand_lower_mat(const int m, const int n, double* A)
     // srand(time(NULL));
 
     // #pragma omp parallel for
-    	for (int j=0; j<n; j++)
-		for (int i=0; i<m; i++)
-			if (i == j)
-				A[i+j*m] = 5.0 - 10*(double)rand() / RAND_MAX;
-			else if (i > j)
-				A[i+j*m] = 1.0 - 2*(double)rand() / RAND_MAX;
-			else
-				A[i+j*m] = 0.0;
+   	for (int j=0; j<n; j++)
+		for (int i=j; i<m; i++)
+			A[i+j*m] = 1.0 - 2*(double)rand() / RAND_MAX;
 }
 
 // Show matrix
