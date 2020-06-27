@@ -11,8 +11,8 @@ using namespace std;
 // Generate random LOWER matrix
 void Gen_rand_lower_mat(const int m, const int n, double* A)
 {
-//	srand(time(NULL));
-	srand(20200314);
+	srand(time(NULL));
+	// srand(20200314);
 
 //	#pragma omp parallel for
 	for (int j=0; j<n; j++)
