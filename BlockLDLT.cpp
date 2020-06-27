@@ -11,11 +11,11 @@ using namespace std;
 // Generate random LOWER matrix
 void Gen_rand_lower_mat(const int m, const int n, double* A)
 {
-	srand(time(NULL));
-	// srand(20200314);
+    srand(20200409);
+    // srand(time(NULL));
 
-//	#pragma omp parallel for
-	for (int j=0; j<n; j++)
+    // #pragma omp parallel for
+   	for (int j=0; j<n; j++)
 		for (int i=j; i<m; i++)
 			A[i+j*m] = 1.0 - 2*(double)rand() / RAND_MAX;
 }
@@ -23,30 +23,98 @@ void Gen_rand_lower_mat(const int m, const int n, double* A)
 // Show matrix
 void Show_mat(const int m, const int n, double* A)
 {
-	for (int i=0; i<m; i++) {
-		for (int j=0; j<n; j++)
-			printf("% 6.4lf, ",A[i + j*m]);
-		cout << endl;
-	}
-	cout << endl;
+    for (int i=0; i<m; i++)
+    {
+        for (int j=0; j<n; j++)
+            printf("% 6.4lf, ",A[i + j*m]);
+        cout << endl;
+    }
+    cout << endl;
 }
 
+// Show tile matrix
+void Show_tilemat(const int m, const int n, const int mb, const int nb, double* A)
+{
+    const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
+    const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
+
+    for (int i=0; i<m; i++)
+    {
+        int ii = i/mb;
+        int ib = min(m-ii*mb,mb);
+        int ti = i - ii*mb;
+        for (int j=0; j<n; j++)
+        {
+            int jj = j/nb;
+            int jb = min(n-jj*nb,nb);
+            int tj = j - jj*nb;
+            
+            printf("% 6.4lf, ",A[m*jj*nb + ii*mb*jb + tj*ib + ti]);
+        }
+        cout << endl;
+    }
+    cout << endl;
+}
+
+void cm2ccrb(const int m, const int n, const int mb, const int nb, double* A, double* B)
+{
+    const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
+    const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
+
+    for (int j=0; j<q; j++)
+    {
+        int jb = min(n-j*nb,nb);
+        for (int i=0; i<p; i++)
+        {
+            int ib = min(m-i*mb,mb);
+            double* Aij = A+(j*nb*m + i*mb);
+            double* Bij = B+(j*nb*m + i*mb*jb);
+
+            for (int jj=0; jj<jb; jj++)
+                for (int ii=0; ii<ib; ii++)
+                    Bij[ jj*ib + ii ] = Aij[ jj*m + ii ];
+        }
+    }
+}
+
+void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, double* A)
+{
+    const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
+    const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
+
+    for (int j=0; j<q; j++)
+    {
+        int jb = min(m-j*nb,nb);
+        for (int i=0; i<p; i++)
+        {
+            int ib = min(m-i*mb,mb);
+            double* Aij = A+(j*nb*m + i*mb);
+            double* Bij = B+(j*nb*m + i*mb*jb);
+
+            for (int jj=0; jj<jb; jj++)
+                for (int ii=0; ii<ib; ii++)
+                    Aij[ jj*m + ii ] = Bij[ jj*ib + ii ];
+        }
+    }
+}
+
+// Serial LDLT factorization
 void dsytrf(const int m, const int lda, double* A)
 {
-	double* v = new double [m];
-	for (int k=0; k<m; k++)
-	{
-		for (int i=0; i<k; i++)
-			v[i] = A[k+i*lda]*A[i+i*lda];
+    double* v = new double [m];
+    for (int k=0; k<m; k++)
+    {
+        for (int i=0; i<k; i++)
+            v[i] = A[k+i*lda]*A[i+i*lda];
 
-		v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
-		A[k+k*lda] = v[k];
+        v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
+        A[k+k*lda] = v[k];
 
-		cblas_dgemv(CblasColMajor, CblasNoTrans,
-				m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
-		cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
-	}
-	delete [] v;
+        cblas_dgemv(CblasColMajor, CblasNoTrans,
+                    m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
+        cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
+    }
+    delete [] v;
 }
 
 // Debug mode
@@ -56,7 +124,7 @@ void dsytrf(const int m, const int lda, double* A)
 #define ITREF
 
 // Trace mode
-//#define TRACE
+// #define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -66,161 +134,224 @@ extern void trace_label(const char *color, const char *label);
 
 int main(const int argc, const char **argv)
 {
-	// Usage "a.out [size of matrix: m ] [tile size: b]"
-	if (argc < 3)
-	{
-		cerr << "Usage a.out [size of matrix: m ] [tile size: b]\n";
-		return EXIT_FAILURE;
-	}
+    // Usage "a.out [size of matrix: m ] [tile size: b]"
+    if (argc < 2)
+    {
+        cerr << "usage: a.out[size of matrix: m ] [tile size: b]\n";
+        return EXIT_FAILURE;
+    }
 
-	const int m = atoi(argv[1]);     // # rows and columns <- square matrix
-	const int nb = atoi(argv[2]);    // tile size
-	const int p =  (m % nb == 0) ? m/nb : m/nb+1;   // # tiles
+    const int m = atoi(argv[1]);       // # rows and columns <- square matrix
+    const int nb = atoi(argv[2]);      // tile size
+    const int p =  (m % nb == 0) ? m/nb : m/nb+1;   // # tiles
 
-	double* A = new double [m*m];    // Original matrix
-	double* DD = new double [m];     // DD_k = Diagonal elements of D_{kk}
-	double* WD = new double [nb*m];  // WD_k = L_{kk}*D_{kk}
-	double* LD = new double [nb*m];  // LD_k = L_{ik}*D_{kk}
-	const int lda = m;               // Leading dimension of A
-	const int ldd = nb;              // Leading dimension of LD
+    double* A = new double [m*m];      // Original matrix
+    double* B = new double [m*m];      // Tiled matrix
+    const int lda = m;                 // Leading dimension of A
 
-	int* P = new int [p*p];          // Progress table
-	const int ldp = p;
+    double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
+    double* WD = new double [nb*m];    // WD_k = L_{kk}*D_{kk}
+    double* LD = new double [nb*m];    // LD_k = L_{ik}*D_{kk}
+    const int ldd = nb;                // Leading dimension of LD and WD
 
-	for (int i=0; i<nb*m; i++)       // Zero initialize of WD
-		WD[i] = 0.0;
+    for (int i=0; i<nb*m; i++)         // Initialize WD to zero
+        WD[i] = 0.0;
+    /////////////////////////////////////////////////////////
 
-	Gen_rand_lower_mat(m,m,A);       // Randomize elements of orig. matrix
+    Gen_rand_lower_mat(m,m,A);         // Randomize elements of orig. matrix
 
-	////////// Debug mode //////////
-	#ifdef DEBUG
-	double *OA = new double[m*m];
-	cblas_dcopy(m*m, A, 1, OA, 1);
-	for (int i=0; i<m; i++)
-		for (int j=0; j<=i; j++)
-			OA[j+i*m] = OA[i+j*m];   // Fill the upper triangular part
-	#endif
-	////////// Debug mode //////////
+    /////////////////////////////////////////////////////////
+    #ifdef DEBUG
+    double *OA = new double[m*m];    // OA: copy of A
+    cblas_dcopy(m*m, A, 1, OA, 1);
+    #endif
+    /////////////////////////////////////////////////////////
 
-	double timer = omp_get_wtime();    // Timer start
+    double timer = omp_get_wtime();   // Timer start
 
-	/////////////////////////////////////////////////////////
-	#pragma omp parallel
-	{
-		#pragma omp single
-		{
-			for (int k=0; k<p; k++)
-			{
-				int kb = min(m-k*nb,nb);
-				double* Akk = A+((k*nb)+(k*nb)*lda);   // Akk: Top address of A_{kk}
-				double* Dk = DD+(k*ldd);               // Dk: diagnal elements of D_{kk}
-				double* Wkk = WD+(k*ldd*ldd);          // Wkk: Top address of L_{kk} * D_{kk}
+    /////////////////////////////////////////////////////////
+    #pragma omp parallel
+    {
+        #pragma omp single
+        {
+            // Convert CM to CCRB
+            for (int j=0; j<p; j++)
+            {
+                int jb = min(m-j*nb,nb);
+                for (int i=j; i<p; i++)
+                {
+                    int ib = min(m-i*nb,nb);
+                    double* Aij = A+(j*nb*m + i*nb);
+                    double* Bij = B+(j*nb*m + i*nb*jb);
 
-				#pragma omp task \
-					depend(inout: P[k+k*ldp]) \
-					depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
-				{
-					#ifdef TRACE
-					trace_cpu_start();
-					trace_label("Red", "DSYTRF");
-					#endif
+                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
+                    {
+                        #ifdef TRACE
+                        trace_cpu_start();
+                        trace_label("Yellow", "Conv.");
+                        #endif
 
-					dsytrf(kb,lda,Akk);         // DSYTRF
+                        for (int jj=0; jj<jb; jj++)
+                            for (int ii=0; ii<ib; ii++)
+                                Bij[ ii+jj*ib ] = Aij[ ii+jj*m ];
 
-					for (int l=0; l<kb; l++)    // Set Dk
-						Dk[l] = Akk[l+l*lda];
+                        #ifdef TRACE
+                        trace_cpu_stop("Yellow");
+                        #endif
+                    }
+                }
+            }
 
-					for (int j=0; j<kb; j++)    // Set Wkk
-						for (int i=j; i<kb; i++)
-							Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Akk[i+j*lda];
+			// Blocked LDLT part start
+            for (int k=0; k<p; k++)
+            {
+                int kb = min(m-k*nb,nb);
+                double* Bkk = B+(k*nb*lda + k*nb*kb);   // Bkk: Top address of B_{kk}
+                double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
+                double* Wkk = WD+(k*ldd*ldd);           // Wkk: Top address of L_{kk} * D_{kk}
 
-					#ifdef TRACE
-					trace_cpu_stop("Red");
-					#endif
-				}
+                #pragma omp task \
+                    depend(inout: Bkk[0:kb*kb]) \
+                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
+                {
+                    #ifdef TRACE
+                    trace_cpu_start();
+                    trace_label("Red", "DSYTRF");
+                    #endif
 
-				for (int i=k+1; i<p; i++)
-				{
-					int ib = min(m-i*nb,nb);
-					double* Aik = A+((i*nb)+(k*nb)*lda);  // Aik: Top address of A_{ik}
-					double* LDk = LD+(k*ldd*ldd);         // LDk:
+					///////////////////////////////
+                    // DSYTRF: B_{kk} -> L_{kk}, D_{kk}
+                    dsytrf(kb,kb,Bkk);          // DSYTRF
 
-					#pragma omp task \
-						depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
-						depend(inout: P[i+k*ldp]) \
-						depend(out: LD[k*ldd*ldd:kb*kb])
-					{
-						#ifdef TRACE
-						trace_cpu_start();
-						trace_label("Green", "DTRSM");
-						#endif
+                    for (int i=0; i<kb; i++)    // Set Dk
+                        Dk[i] = Bkk[i+i*kb];
 
-						// Updatre A_{ik}
-						cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
-									ib, kb, 1.0, Wkk, ldd, Aik, lda);
+                    for (int j=0; j<kb; j++)    // Set Wkk
+                        for (int i=j; i<kb; i++)
+                            Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Bkk[i+j*kb];
 
-						for (int l=0; l<kb; l++)       // LD_k = L_{ik}*D_{kk}
-						{
-							cblas_dcopy(ib, Aik+l*lda, 1, LDk+l*ldd, 1);
-							cblas_dscal(ib, DD[l+k*ldd], LDk+l*ldd, 1);
-						}
+                    #ifdef TRACE
+                    trace_cpu_stop("Red");
+                    #endif
+                }
 
-						#ifdef TRACE
-						trace_cpu_stop("Green");
-						#endif
-					}
+                for (int i=k+1; i<p; i++)
+                {
+                    int ib = min(m-i*nb,nb);
+                    double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
+                    double* LDk = LD+(k*ldd*ldd);           // LDk:
 
-					for (int j=k+1; j<=i; j++)
-					{
-						int jb = min(m-j*nb,nb);
-						double *Aij = A+((i*nb)+(j*nb)*lda);
-						double *Ljk = A+((j*nb)+(k*nb)*lda);
+                    #pragma omp task \
+                        depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
+                        depend(inout: Bik[0:ib*kb]) \
+                        depend(out: LD[k*ldd*ldd:kb*kb])
+                    {
+                        #ifdef TRACE
+                        {
+                            trace_cpu_start();
+                            trace_label("Green", "DTRSM");
+                        }
+                        #endif
 
-						#pragma omp task \
-							depend(in: LD[k*ldd*ldd:kb*kb], P[j+k*ldp]) \
-							depend(inout: P[i+j*ldp])
-						{
-							#ifdef TRACE
-							if (i==j) {
-								trace_cpu_start();
-								trace_label("Cyan", "DSYDRK");
-							} else {
-								trace_cpu_start();
-								trace_label("Blue", "DGEMDM");
-							}
-							#endif
+						///////////////////////////////
+                        // TRSM: B_{ik} -> L_{ik}
+                        cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
+                                    ib, kb, 1.0, Wkk, ldd, Bik, ib);
 
-							// Update A_{ij}
-							cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-									ib, jb, kb, -1.0, LDk, ldd, Ljk, lda, 1.0, Aij, lda);
+                        for (int l=0; l<kb; l++)       // LD_k = L_{ik}*D_{kk}
+                        {
+                            cblas_dcopy(ib, Bik+l*ib, 1, LDk+l*ldd, 1);
+                            cblas_dscal(ib, DD[l+k*ldd], LDk+l*ldd, 1);
+                        }
 
-							// Banish upper part of A_{ii}
-							if (i==j)
-								for (int ii=0; ii<ib; ii++)
-									for (int jj=ii+1; jj<jb; jj++)
-										Aij[ii+jj*lda] = 0.0;
+                        #ifdef TRACE
+                        {
+                            trace_cpu_stop("Green");
+                        }
+                        #endif
+                    }
 
-							#ifdef TRACE
-							if (i==j)
-								trace_cpu_stop("Cyan");
-							else
-								trace_cpu_stop("Blue");
-							#endif
-						}
-					}
-				} // End of i-loop
-			} // End of k-loop
-		} // End of single region
-	} // End of parallel region
-	/////////////////////////////////////////////////////////
+                    for (int j=k+1; j<=i; j++)
+                    {
+                        int jb = min(m-j*nb,nb);
+                        double *Bij = B+(j*nb*lda + i*nb*jb);
+                        double *Ljk = B+(k*nb*lda + j*nb*kb);
 
-	timer = omp_get_wtime() - timer;   // Timer stop
+                        #pragma omp task \
+                            depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
+                            depend(inout: Bij[0:ib*jb])
+                        {
+                            #ifdef TRACE
+                            {
+                                if (i==j) {
+                                    trace_cpu_start();
+                                    trace_label("Cyan", "DSYDRK");
+                                } else {
+                                    trace_cpu_start();
+                                    trace_label("Blue", "DGEMDM");
+                                }
+                            }
+                            #endif
 
-	// cout << m << ", " << timer << endl;
-	cout << m << ", " << timer << ", ";
+                            // Update B_{ij}
+                            cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                                        ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
 
-	////////// Debug mode //////////
-	#ifdef DEBUG
+                            // Banish upper part of A_{ii}
+                            if (i==j)
+                                for (int ii=0; ii<ib; ii++)
+                                    for (int jj=ii+1; jj<jb; jj++)
+                                        Bij[ii+jj*ib] = 0.0;
+
+                            #ifdef TRACE
+                            {
+                                if (i==j)
+                                    trace_cpu_stop("Cyan");
+                                else
+                                    trace_cpu_stop("Blue");
+                            }
+                            #endif
+                        }
+                    }
+                } // End of i-loop
+            } // End of k-loop
+
+            // Convert CCRB to CM
+            for (int j=0; j<p; j++)
+            {
+                int jb = min(m-j*nb,nb);
+                for (int i=j; i<p; i++)
+                {
+                    int ib = min(m-i*nb,nb);
+                    double* Aij = A+(j*nb*m + i*nb);
+                    double* Bij = B+(j*nb*m + i*nb*jb);
+
+                    #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
+                    {
+                        #ifdef TRACE
+                        trace_cpu_start();
+                        trace_label("Violet", "Conv.");
+                        #endif
+
+                        for (int jj=0; jj<jb; jj++)
+                            for (int ii=0; ii<ib; ii++)
+                                Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
+                        
+                        #ifdef TRACE
+                        trace_cpu_stop("Violet");
+                        #endif
+                    }
+                }
+            }
+        } // End of single region
+    } // End of parallel region
+    /////////////////////////////////////////////////////////
+
+    timer = omp_get_wtime() - timer; // Timer stop
+    cout << m << ", " << timer << ", ";
+
+    /////////////////////////////////////////////////////////
+    #ifdef DEBUG
 	// cout << "Debug mode: \n";
 
 	double* b = new double [m];        // RHS vector
@@ -231,16 +362,14 @@ int main(const int argc, const char **argv)
 	timer = omp_get_wtime();    // Timer start
 
 	// Solve L*x = b for x
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
-		m, 1, 1.0, A, lda, x, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
 
 	// x := D^{-1} x
 	for (int i=0; i<m; i++)
-		x[i] /= DD[i];
+		x[i] /= A[i+i*lda];
 	
 	// Solbe L^{T}*y = x for y(x)
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit,
-		m, 1, 1.0, A, lda, x, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 	// cout << m << ", " << timer << endl;
@@ -248,7 +377,7 @@ int main(const int argc, const char **argv)
 
 	// b := b - A*x
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-	// cout << "No piv LDLT:    || A - L*D*L^T ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	// cout << "No piv LDLT:    || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
 	cout << cblas_dnrm2(m, b, 1) << ", ";
 
 	////////// Iterative refinement //////////
@@ -261,16 +390,14 @@ int main(const int argc, const char **argv)
 	timer = omp_get_wtime();    // Timer start
 
 	// Solve L*y = r for y(r)
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
-		m, 1, 1.0, A, lda, r, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, m, 1, 1.0, A, lda, r, lda);
 
 	// r := D^{-1} r
 	for (int i=0; i<m; i++)
-		r[i] /= DD[i];
+		r[i] /= A[i+i*lda];
 	
 	// Solbe L^{T}*y = r for y(r)
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit,
-		m, 1, 1.0, A, lda, r, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, m, 1, 1.0, A, lda, r, lda);
 
 	// x := x+r
 	cblas_daxpy(m,1.0,r,1,x,1);
@@ -281,7 +408,7 @@ int main(const int argc, const char **argv)
 
 	// b := b - A*x
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-	// cout << "Apply 1 it ref: || A - L*D*L^T ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
+	// cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
 	cout << cblas_dnrm2(m, b, 1) << endl;
 
 	delete [] r;
@@ -292,14 +419,14 @@ int main(const int argc, const char **argv)
 	delete [] b;
 	delete [] x;
 	#endif
-	////////// Debug mode //////////
+    /////////////////////////////////////////////////////////
 
-	delete [] A;
-	delete [] DD;
-	delete [] WD;
-	delete [] LD;
-	delete [] P;
+    delete [] A;
+    delete [] B;
+    delete [] DD;
+    delete [] WD;
+    delete [] LD;
 
-	return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
