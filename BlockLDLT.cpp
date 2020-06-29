@@ -169,6 +169,12 @@ int main(const int argc, const char **argv)
 
     double timer = omp_get_wtime();   // Timer start
 
+    // cm2ccrb(m,m,nb,nb,A,B);
+
+    // timer = omp_get_wtime() - timer; // Timer stop
+    // cout << m << ", " << timer << ", ";
+    // timer = omp_get_wtime();
+
     /////////////////////////////////////////////////////////
     #pragma omp parallel
     {
@@ -346,6 +352,12 @@ int main(const int argc, const char **argv)
         } // End of single region
     } // End of parallel region
     /////////////////////////////////////////////////////////
+
+    // timer = omp_get_wtime() - timer; // Timer stop
+    // cout << timer << ", ";
+    // timer = omp_get_wtime();
+
+    // ccrb2cm(m,m,nb,nb,B,A);
 
     timer = omp_get_wtime() - timer; // Timer stop
     cout << m << ", " << timer << ", ";
