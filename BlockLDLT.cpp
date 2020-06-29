@@ -11,8 +11,8 @@ using namespace std;
 // Generate random LOWER matrix
 void Gen_rand_lower_mat(const int m, const int n, double* A)
 {
-    srand(20200409);
-    // srand(time(NULL));
+    // srand(20200409);
+    srand(time(NULL));
 
     // #pragma omp parallel for
    	for (int j=0; j<n; j++)
@@ -117,12 +117,6 @@ void dsytrf(const int m, const int lda, double* A)
     delete [] v;
 }
 
-// Debug mode
-#define DEBUG
-
-// Apply iterative refinement
-#define ITREF
-
 // Trace mode
 // #define TRACE
 
@@ -146,6 +140,7 @@ int main(const int argc, const char **argv)
     const int p =  (m % nb == 0) ? m/nb : m/nb+1;   // # tiles
 
     double* A = new double [m*m];      // Original matrix
+	double *OA = new double[m*m];      // OA: copy of A
     double* B = new double [m*m];      // Tiled matrix
     const int lda = m;                 // Leading dimension of A
 
@@ -154,26 +149,20 @@ int main(const int argc, const char **argv)
     double* LD = new double [nb*m];    // LD_k = L_{ik}*D_{kk}
     const int ldd = nb;                // Leading dimension of LD and WD
 
+	double* b = new double [m];        // RHS vector
+	double* x = new double [m];        // Solution vector
+	double* r = new double [m];        // Residure vector
+	for (int i=0; i<m; i++)
+		b[i] = x[i] = 1.0;
+
     for (int i=0; i<nb*m; i++)         // Initialize WD to zero
         WD[i] = 0.0;
     /////////////////////////////////////////////////////////
 
     Gen_rand_lower_mat(m,m,A);         // Randomize elements of orig. matrix
+	cblas_dcopy(m*m, A, 1, OA, 1);
 
-    /////////////////////////////////////////////////////////
-    #ifdef DEBUG
-    double *OA = new double[m*m];    // OA: copy of A
-    cblas_dcopy(m*m, A, 1, OA, 1);
-    #endif
-    /////////////////////////////////////////////////////////
-
-    double timer = omp_get_wtime();   // Timer start
-
-    // cm2ccrb(m,m,nb,nb,A,B);
-
-    // timer = omp_get_wtime() - timer; // Timer stop
-    // cout << m << ", " << timer << ", ";
-    // timer = omp_get_wtime();
+    double timer = omp_get_wtime();    // Timer start
 
     /////////////////////////////////////////////////////////
     #pragma omp parallel
@@ -353,26 +342,11 @@ int main(const int argc, const char **argv)
     } // End of parallel region
     /////////////////////////////////////////////////////////
 
-    // timer = omp_get_wtime() - timer; // Timer stop
-    // cout << timer << ", ";
-    // timer = omp_get_wtime();
-
-    // ccrb2cm(m,m,nb,nb,B,A);
-
     timer = omp_get_wtime() - timer; // Timer stop
     cout << m << ", " << timer << ", ";
-
-    /////////////////////////////////////////////////////////
-    #ifdef DEBUG
-	// cout << "Debug mode: \n";
-
-	double* b = new double [m];        // RHS vector
-	double* x = new double [m];        // Solution vector
-	for (int i=0; i<m; i++)
-		b[i] = x[i] = 1.0;
-	
 	timer = omp_get_wtime();    // Timer start
 
+	////////// Solve A*x = b //////////
 	// Solve L*x = b for x
 	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
 
@@ -393,8 +367,6 @@ int main(const int argc, const char **argv)
 	cout << cblas_dnrm2(m, b, 1) << ", ";
 
 	////////// Iterative refinement //////////
-	#ifdef ITREF
-	double* r = new double [m];       // Residure vector
 	cblas_dcopy(m,b,1,r,1);
 	for (int i=0; i<m; i++)
 		b[i] = 1.0;
@@ -422,22 +394,17 @@ int main(const int argc, const char **argv)
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
 	// cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
 	cout << cblas_dnrm2(m, b, 1) << endl;
-
-	delete [] r;
-	#endif
 	////////// Iterative refinement //////////
 
-	delete [] OA;
-	delete [] b;
-	delete [] x;
-	#endif
-    /////////////////////////////////////////////////////////
-
     delete [] A;
+	delete [] OA;
     delete [] B;
     delete [] DD;
     delete [] WD;
     delete [] LD;
+	delete [] b;
+	delete [] x;
+	delete [] r;
 
     return EXIT_SUCCESS;
 }
