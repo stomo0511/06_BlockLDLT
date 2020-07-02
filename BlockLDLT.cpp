@@ -184,7 +184,7 @@ int main(const int argc, const char **argv)
     {
         #pragma omp single
         {
-            cm2ccrb(m,m,nb,nb,A,B);    // Convert CM to CCRB
+            cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
  
 			// Blocked LDLT part start
             for (int k=0; k<p; k++)
@@ -300,7 +300,7 @@ int main(const int argc, const char **argv)
                 } // End of i-loop
             } // End of k-loop
 
-            ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB to CM
+            ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
         } // End of single region
     } // End of parallel region
     /////////////////////////////////////////////////////////
