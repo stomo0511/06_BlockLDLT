@@ -164,14 +164,13 @@ int main(const int argc, const char **argv)
     const int p =  (m % nb == 0) ? m/nb : m/nb+1;   // # tiles
 
     double* A = new double [m*m];      // Original matrix
-    double *OA = new double[m*m];    // OA: copy of A
+    double* OA = new double[m*m];    // OA: copy of A
     double* B = new double [m*m];      // Tiled matrix
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* WD = new double [nb*m];    // WD_k = L_{kk}*D_{kk}
     double* LD = new double [nb*m];    // LD_k = L_{ik}*D_{kk}
-    const int ldd = nb;                // Leading dimension of LD and WD
+    const int ldd = nb;                // Leading dimension of LD
     /////////////////////////////////////////////////////////
 
     Gen_rand_lower_mat(m,m,A);         // Randomize elements of orig. matrix
@@ -192,11 +191,10 @@ int main(const int argc, const char **argv)
                 int kb = min(m-k*nb,nb);
                 double* Bkk = B+(k*nb*lda + k*nb*kb);   // Bkk: Top address of B_{kk}
                 double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
-                double* Wkk = WD+(k*ldd*ldd);           // Wkk: Top address of L_{kk} * D_{kk}
 
                 #pragma omp task \
                     depend(inout: Bkk[0:kb*kb]) \
-                    depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
+                    depend(out: DD[k*ldd:kb])
                 {
                     #ifdef TRACE
                     trace_cpu_start();
@@ -210,10 +208,6 @@ int main(const int argc, const char **argv)
                     for (int i=0; i<kb; i++)    // Set Dk
                         Dk[i] = Bkk[i+i*kb];
 
-                    for (int j=0; j<kb; j++)    // Set Wkk
-                        for (int i=j; i<kb; i++)
-                            Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Bkk[i+j*kb];
-
                     #ifdef TRACE
                     trace_cpu_stop("Red");
                     #endif
@@ -226,7 +220,7 @@ int main(const int argc, const char **argv)
                     double* LDk = LD+(k*ldd*ldd);           // LDk:
 
                     #pragma omp task \
-                        depend(in: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb]) \
+                        depend(in: DD[k*ldd:kb]) \
                         depend(inout: Bik[0:ib*kb]) \
                         depend(out: LD[k*ldd*ldd:kb*kb])
                     {
@@ -239,13 +233,14 @@ int main(const int argc, const char **argv)
 
 						///////////////////////////////
                         // TRSM: B_{ik} -> L_{ik}
-                        cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
-                                    ib, kb, 1.0, Wkk, ldd, Bik, ib);
+                        cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
+                                    ib, kb, 1.0, Bkk, kb, Bik, ib);
 
-                        for (int l=0; l<kb; l++)       // LD_k = L_{ik}*D_{kk}
+                        for (int l=0; l<kb; l++)       
                         {
-                            cblas_dcopy(ib, Bik+l*ib, 1, LDk+l*ldd, 1);
-                            cblas_dscal(ib, DD[l+k*ldd], LDk+l*ldd, 1);
+                            cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
+                            cblas_dcopy(ib, Bik+l*ib, 1, LDk+l*ldd, 1);  // LD_k = L_{ik}*D_{kk}
+                            cblas_dscal(ib, Dk[l], LDk+l*ldd, 1); 
                         }
 
                         #ifdef TRACE
@@ -299,7 +294,6 @@ int main(const int argc, const char **argv)
                     }
                 } // End of i-loop
             } // End of k-loop
-
             ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
         } // End of single region
     } // End of parallel region
@@ -375,7 +369,6 @@ int main(const int argc, const char **argv)
     delete [] OA;
     delete [] B;
     delete [] DD;
-    delete [] WD;
     delete [] LD;
     delete [] r;
 	delete [] b;
