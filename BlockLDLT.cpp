@@ -56,7 +56,7 @@ void Show_tilemat(const int m, const int n, const int mb, const int nb, double* 
     cout << endl;
 }
 
-void cm2ccrb(const int m, const int n, const int mb, const int nb, double* A, double* B)
+void cm2ccrb(const int m, const int n, const int mb, const int nb, const double* A, double* B)
 {
     const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
     const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
@@ -64,20 +64,32 @@ void cm2ccrb(const int m, const int n, const int mb, const int nb, double* A, do
     for (int j=0; j<q; j++)
     {
         int jb = min(n-j*nb,nb);
-        for (int i=0; i<p; i++)
+        for (int i=j; i<p; i++)
         {
             int ib = min(m-i*mb,mb);
-            double* Aij = A+(j*nb*m + i*mb);
+            const double* Aij = A+(j*nb*m + i*mb);
             double* Bij = B+(j*nb*m + i*mb*jb);
 
-            for (int jj=0; jj<jb; jj++)
-                for (int ii=0; ii<ib; ii++)
-                    Bij[ jj*ib + ii ] = Aij[ jj*m + ii ];
+            #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
+            {
+                #ifdef TRACE
+                trace_cpu_start();
+                trace_label("Yellow", "Conv.");
+                #endif
+
+                for (int jj=0; jj<jb; jj++)
+                    for (int ii=0; ii<ib; ii++)
+                        Bij[ ii + jj*ib ] = Aij[ ii + jj*m ];
+
+                #ifdef TRACE
+                trace_cpu_stop("Yellow");
+                #endif
+            }
         }
     }
 }
 
-void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, double* A)
+void ccrb2cm(const int m, const int n, const int mb, const int nb, const double* B, double* A)
 {
     const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
     const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
@@ -85,15 +97,27 @@ void ccrb2cm(const int m, const int n, const int mb, const int nb, double* B, do
     for (int j=0; j<q; j++)
     {
         int jb = min(m-j*nb,nb);
-        for (int i=0; i<p; i++)
+        for (int i=j; i<p; i++)
         {
             int ib = min(m-i*mb,mb);
-            double* Aij = A+(j*nb*m + i*mb);
-            double* Bij = B+(j*nb*m + i*mb*jb);
+            double* Aij = A+(j*nb*m + i*nb);
+            const double* Bij = B+(j*nb*m + i*nb*jb);
 
-            for (int jj=0; jj<jb; jj++)
-                for (int ii=0; ii<ib; ii++)
-                    Aij[ jj*m + ii ] = Bij[ jj*ib + ii ];
+            #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
+            {
+                #ifdef TRACE
+                trace_cpu_start();
+                trace_label("Violet", "Conv.");
+                #endif
+
+                for (int jj=0; jj<jb; jj++)
+                    for (int ii=0; ii<ib; ii++)
+                        Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
+
+                #ifdef TRACE
+                trace_cpu_stop("Violet");
+                #endif
+            }
         }
     }
 }
@@ -140,7 +164,7 @@ int main(const int argc, const char **argv)
     const int p =  (m % nb == 0) ? m/nb : m/nb+1;   // # tiles
 
     double* A = new double [m*m];      // Original matrix
-	double *OA = new double[m*m];      // OA: copy of A
+    double* OA = new double[m*m];    // OA: copy of A
     double* B = new double [m*m];      // Tiled matrix
     const int lda = m;                 // Leading dimension of A
 
@@ -148,55 +172,20 @@ int main(const int argc, const char **argv)
     double* WD = new double [nb*m];    // WD_k = L_{kk}*D_{kk}
     double* LD = new double [nb*m];    // LD_k = L_{ik}*D_{kk}
     const int ldd = nb;                // Leading dimension of LD and WD
-
-	double* b = new double [m];        // RHS vector
-	double* x = new double [m];        // Solution vector
-	double* r = new double [m];        // Residure vector
-	for (int i=0; i<m; i++)
-		b[i] = x[i] = 1.0;
-
-    for (int i=0; i<nb*m; i++)         // Initialize WD to zero
-        WD[i] = 0.0;
     /////////////////////////////////////////////////////////
 
     Gen_rand_lower_mat(m,m,A);         // Randomize elements of orig. matrix
-	cblas_dcopy(m*m, A, 1, OA, 1);
+    cblas_dcopy(m*m, A, 1, OA, 1);
 
-    double timer = omp_get_wtime();    // Timer start
+    double timer = omp_get_wtime();   // Timer start
 
     /////////////////////////////////////////////////////////
     #pragma omp parallel
     {
         #pragma omp single
         {
-            // Convert CM to CCRB
-            for (int j=0; j<p; j++)
-            {
-                int jb = min(m-j*nb,nb);
-                for (int i=j; i<p; i++)
-                {
-                    int ib = min(m-i*nb,nb);
-                    double* Aij = A+(j*nb*m + i*nb);
-                    double* Bij = B+(j*nb*m + i*nb*jb);
-
-                    #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
-                    {
-                        #ifdef TRACE
-                        trace_cpu_start();
-                        trace_label("Yellow", "Conv.");
-                        #endif
-
-                        for (int jj=0; jj<jb; jj++)
-                            for (int ii=0; ii<ib; ii++)
-                                Bij[ ii+jj*ib ] = Aij[ ii+jj*m ];
-
-                        #ifdef TRACE
-                        trace_cpu_stop("Yellow");
-                        #endif
-                    }
-                }
-            }
-
+            cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
+ 
 			// Blocked LDLT part start
             for (int k=0; k<p; k++)
             {
@@ -210,8 +199,10 @@ int main(const int argc, const char **argv)
                     depend(out: DD[k*ldd:kb], WD[k*ldd*ldd:kb*kb])
                 {
                     #ifdef TRACE
-                    trace_cpu_start();
-                    trace_label("Red", "DSYTRF");
+                    {
+                        trace_cpu_start();
+                        trace_label("Red", "DSYTRF");
+                    }
                     #endif
 
 					///////////////////////////////
@@ -226,7 +217,9 @@ int main(const int argc, const char **argv)
                             Wkk[i+j*ldd] = (i==j) ? Dk[j] : Dk[j]*Bkk[i+j*kb];
 
                     #ifdef TRACE
-                    trace_cpu_stop("Red");
+                    {
+                        trace_cpu_stop("Red");
+                    }
                     #endif
                 }
 
@@ -311,51 +304,33 @@ int main(const int argc, const char **argv)
                 } // End of i-loop
             } // End of k-loop
 
-            // Convert CCRB to CM
-            for (int j=0; j<p; j++)
-            {
-                int jb = min(m-j*nb,nb);
-                for (int i=j; i<p; i++)
-                {
-                    int ib = min(m-i*nb,nb);
-                    double* Aij = A+(j*nb*m + i*nb);
-                    double* Bij = B+(j*nb*m + i*nb*jb);
-
-                    #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
-                    {
-                        #ifdef TRACE
-                        trace_cpu_start();
-                        trace_label("Violet", "Conv.");
-                        #endif
-
-                        for (int jj=0; jj<jb; jj++)
-                            for (int ii=0; ii<ib; ii++)
-                                Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
-                        
-                        #ifdef TRACE
-                        trace_cpu_stop("Violet");
-                        #endif
-                    }
-                }
-            }
+            ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
         } // End of single region
     } // End of parallel region
     /////////////////////////////////////////////////////////
 
     timer = omp_get_wtime() - timer; // Timer stop
     cout << m << ", " << timer << ", ";
+
+    /////////////////////////////////////////////////////////
+	double* b = new double [m];        // RHS vector
+	double* x = new double [m];        // Solution vector
+	for (int i=0; i<m; i++)
+		b[i] = x[i] = 1.0;
+	
 	timer = omp_get_wtime();    // Timer start
 
-	////////// Solve A*x = b //////////
 	// Solve L*x = b for x
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, 
+        m, 1, 1.0, A, lda, x, lda);
 
 	// x := D^{-1} x
 	for (int i=0; i<m; i++)
 		x[i] /= A[i+i*lda];
 	
 	// Solbe L^{T}*y = x for y(x)
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, m, 1, 1.0, A, lda, x, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, 
+        m, 1, 1.0, A, lda, x, lda);
 
 	timer = omp_get_wtime() - timer;   // Timer stop
 	// cout << m << ", " << timer << endl;
@@ -367,6 +342,7 @@ int main(const int argc, const char **argv)
 	cout << cblas_dnrm2(m, b, 1) << ", ";
 
 	////////// Iterative refinement //////////
+	double* r = new double [m];       // Residure vector
 	cblas_dcopy(m,b,1,r,1);
 	for (int i=0; i<m; i++)
 		b[i] = 1.0;
@@ -374,14 +350,16 @@ int main(const int argc, const char **argv)
 	timer = omp_get_wtime();    // Timer start
 
 	// Solve L*y = r for y(r)
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, m, 1, 1.0, A, lda, r, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit, 
+        m, 1, 1.0, A, lda, r, lda);
 
 	// r := D^{-1} r
 	for (int i=0; i<m; i++)
 		r[i] /= A[i+i*lda];
 	
 	// Solbe L^{T}*y = r for y(r)
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, m, 1, 1.0, A, lda, r, lda);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasTrans, CblasUnit, 
+        m, 1, 1.0, A, lda, r, lda);
 
 	// x := x+r
 	cblas_daxpy(m,1.0,r,1,x,1);
@@ -394,18 +372,18 @@ int main(const int argc, const char **argv)
 	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
 	// cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
 	cout << cblas_dnrm2(m, b, 1) << endl;
-	////////// Iterative refinement //////////
+
+    /////////////////////////////////////////////////////////
 
     delete [] A;
-	delete [] OA;
+    delete [] OA;
     delete [] B;
     delete [] DD;
     delete [] WD;
     delete [] LD;
+    delete [] r;
 	delete [] b;
 	delete [] x;
-	delete [] r;
 
     return EXIT_SUCCESS;
 }
-
