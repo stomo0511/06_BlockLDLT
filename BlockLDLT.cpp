@@ -194,7 +194,7 @@ int main(const int argc, const char **argv)
 
                 #pragma omp task \
                     depend(inout: Bkk[0:kb*kb]) \
-                    depend(out: DD[k*ldd:kb])
+                    depend(out: Dk[0:kb])
                 {
                     #ifdef TRACE
                     trace_cpu_start();
@@ -220,9 +220,9 @@ int main(const int argc, const char **argv)
                     double* LDk = LD+(k*ldd*ldd);           // LDk:
 
                     #pragma omp task \
-                        depend(in: DD[k*ldd:kb]) \
+                        depend(in: Bkk[0:kb*kb], Dk[0:kb]) \
                         depend(inout: Bik[0:ib*kb]) \
-                        depend(out: LD[k*ldd*ldd:kb*kb])
+                        depend(out: LDk[0:kb*kb])
                     {
                         #ifdef TRACE
                         {
@@ -257,7 +257,7 @@ int main(const int argc, const char **argv)
                         double *Ljk = B+(k*nb*lda + j*nb*kb);
 
                         #pragma omp task \
-                            depend(in: LD[k*ldd*ldd:kb*kb], Ljk[0:jb*kb]) \
+                            depend(in: LDk[0:kb*kb], Ljk[0:jb*kb]) \
                             depend(inout: Bij[0:ib*jb])
                         {
                             #ifdef TRACE
