@@ -17,7 +17,7 @@ void Gen_rand_lower_mat(const int m, const int n, double* A)
     // #pragma omp parallel for
    	for (int j=0; j<n; j++)
 		for (int i=j; i<m; i++)
-			A[i+j*m] = 1.0 - 2*(double)rand() / RAND_MAX;
+			A[i+j*m] = 10.0 - 20.0*(double)rand() / RAND_MAX;
 }
 
 // Show matrix
@@ -153,7 +153,7 @@ extern void trace_label(const char *color, const char *label);
 int main(const int argc, const char **argv)
 {
     // Usage "a.out [size of matrix: m ] [tile size: b]"
-    if (argc < 2)
+    if (argc < 3)
     {
         cerr << "usage: a.out[size of matrix: m ] [tile size: b]\n";
         return EXIT_FAILURE;
