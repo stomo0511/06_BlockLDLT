@@ -142,7 +142,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Trace mode
-// #define TRACE
+#define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -183,7 +183,33 @@ int main(const int argc, const char **argv)
     {
         #pragma omp single
         {
-            cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
+            // cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
+			for (int j=0; j<p; j++)
+			{
+		        int jb = min(m-j*nb,nb);
+		        for (int i=j; i<p; i++)
+		        {
+		            int ib = min(m-i*nb,nb);
+		            const double* Aij = A+(j*nb*m + i*nb);
+		            double* Bij = B+(j*nb*m + i*nb*jb);
+
+		            #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
+		            {
+		                #ifdef TRACE
+        		        trace_cpu_start();
+                		trace_label("Yellow", "Conv.");
+		                #endif
+
+		                for (int jj=0; jj<jb; jj++)
+        		            for (int ii=0; ii<ib; ii++)
+                		        Bij[ ii + jj*ib ] = Aij[ ii + jj*m ];
+
+		                #ifdef TRACE
+        		        trace_cpu_stop("Yellow");
+		                #endif
+					}
+		        }
+		    }
  
 			// Blocked LDLT part start
             for (int k=0; k<p; k++)
@@ -294,7 +320,34 @@ int main(const int argc, const char **argv)
                     }
                 } // End of i-loop
             } // End of k-loop
-            ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
+
+            // ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
+		   for (int j=0; j<p; j++)
+		    {
+		        int jb = min(m-j*nb,nb);
+		        for (int i=j; i<p; i++)
+		        {
+		            int ib = min(m-i*nb,nb);
+		            double* Aij = A+(j*nb*m + i*nb);
+		            const double* Bij = B+(j*nb*m + i*nb*jb);
+
+		            #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
+		            {
+        		        #ifdef TRACE
+                		trace_cpu_start();
+		                trace_label("Violet", "Conv.");
+		                #endif
+
+		                for (int jj=0; jj<jb; jj++)
+        		            for (int ii=0; ii<ib; ii++)
+                		        Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
+
+		                #ifdef TRACE
+		                trace_cpu_stop("Violet");
+		                #endif
+		            }
+		        }
+		    }
         } // End of single region
     } // End of parallel region
     /////////////////////////////////////////////////////////
