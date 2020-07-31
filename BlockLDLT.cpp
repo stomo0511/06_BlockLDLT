@@ -5,6 +5,7 @@
 #include <ctime>
 #include <omp.h>
 #include <mkl.h>
+// #include <unistd.h>
 
 using namespace std;
 
@@ -341,6 +342,7 @@ int main(const int argc, const char **argv)
 		                for (int jj=0; jj<jb; jj++)
         		            for (int ii=0; ii<ib; ii++)
                 		        Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
+                        // usleep(1000);
 
 		                #ifdef TRACE
 		                trace_cpu_stop("Violet");
