@@ -15,7 +15,7 @@ void Gen_rand_lower_mat(const int m, const int n, double* A)
     // srand(20200409);
     srand(time(NULL));
 
-    // #pragma omp parallel for
+    #pragma omp parallel for
    	for (int j=0; j<n; j++)
 		for (int i=j; i<m; i++)
 			A[i+j*m] = 10.0 - 20.0*(double)rand() / RAND_MAX;
@@ -143,7 +143,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Trace mode
-#define TRACE
+// #define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
