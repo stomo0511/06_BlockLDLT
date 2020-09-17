@@ -2,22 +2,21 @@ UNAME = $(shell uname)
 ifeq ($(UNAME),Linux)
 	# CXX = g++-7
 	CXX = icpc
+	CXXFLAGS = -m64 -openmp -O3
 	LIB_DIR = /opt/intel/compilers_and_libraries/linux/lib/intel64
 	LIBS = -pthread -lm -ldl
-	MKL_ROOT = /opt/intel/compilers_and_libraries/linux/mkl
-	MKL_LIB_DIR = $(MKL_ROOT)/lib/intel64
+	MKL_LIB_DIR = $(MKLROOT)/lib/intel64
 endif
 ifeq ($(UNAME),Darwin)
 	CXX = /usr/local/bin/g++-9
+	CXXFLAGS = -m64 -fopenmp -O3
 	LIB_DIR = /opt/intel/compilers_and_libraries/mac/lib
-	MKL_ROOT = /opt/intel/compilers_and_libraries/mac/mkl
-	MKL_LIB_DIR = $(MKL_ROOT)/lib
+	LIBS = -pthread -lm -ldl
+	MKL_LIB_DIR = $(MKLROOT)/lib
 endif
 
-CXXFLAGS = -m64 -fopenmp -O3
-
 LIBS = -liomp5
-MKL_INC_DIR = $(MKL_ROOT)/include
+MKL_INC_DIR = $(MKLROOT)/include
 MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
 
 OBJS =	BlockLDLT.o
