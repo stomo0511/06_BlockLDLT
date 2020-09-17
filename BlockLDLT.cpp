@@ -14,6 +14,7 @@ void Gen_rand_lower_mat(const int m, const int n, double *A)
 	srand(time(NULL));
 //	srand(20200314);
 
+    #pragma omp parallel for
 	for (int j=0; j<n; j++)
 		for (int i=j; i<m; i++)
 				A[i+j*m] = 10.0 - 20.0*(double)rand() / RAND_MAX;
@@ -29,6 +30,8 @@ void Show_mat(const int m, const int n, double *A)
 	}
 	cout << endl;
 }
+
+#define MAX_LC 10
 
 int main(const int argc, const char **argv)
 {
@@ -48,33 +51,55 @@ int main(const int argc, const char **argv)
 
 	double* b = new double [m];      // RHS vector
 	double* x = new double [m];      // Solution vector
+    double* r = new double [m];      // residure vector
 
-	Gen_rand_lower_mat(m,m,A);       // Randomize elements of orig. matrix
-	cblas_dcopy(m*m, A, 1, OA, 1);
+	Gen_rand_lower_mat(m,m,OA);      // Randomize elements of orig. matrix
 
-	for (int i=0; i<m; i++)
-		x[i] = b[i] = (double)(1.0);
+	for (int lc = 0; lc < MAX_LC; lc++)
+	{
+		cblas_dcopy(m*m, OA, 1, A, 1);
 
-	double timer = omp_get_wtime();    // Timer start
-	assert(0 == LAPACKE_dsytrf(MKL_COL_MAJOR, 'L', m, A, lda, ipiv));
-	timer = omp_get_wtime() - timer;   // Timer stop
-	cout << m << ", " << timer << ", ";
+		for (int i=0; i<m; i++)
+			x[i] = b[i] = (double)(1.0);
 
-	timer = omp_get_wtime();            // Timer start
-	assert(0 == LAPACKE_dsytrs(LAPACK_COL_MAJOR, 'L', m, 1, A, lda, ipiv, x, lda));
-	timer = omp_get_wtime() - timer;   // Timer stop
-	cout << timer << ", ";
+		double timer = omp_get_wtime();    // Timer start
+		assert(0 == LAPACKE_dsytrf(MKL_COL_MAJOR, 'L', m, A, lda, ipiv));
+		timer = omp_get_wtime() - timer;   // Timer stop
+		cout << m << ", " << timer << ", ";
 
-	///////////////////////////////////////////////////////////////////////////////
-	// Check || A*x - b ||
-	cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-    cout << cblas_dnrm2(m, b, 1) << endl;
+		timer = omp_get_wtime();            // Timer start
+		assert(0 == LAPACKE_dsytrs(LAPACK_COL_MAJOR, 'L', m, 1, A, lda, ipiv, x, lda));
+		timer = omp_get_wtime() - timer;   // Timer stop
+		cout << timer << ", ";
+
+		///////////////////////////////////////////////////////////////////////////////
+		// Check || A*x - b ||
+		cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
+		cout << cblas_dnrm2(m, b, 1) << ", ";
+
+		///////////////////////////////////////////////////////////////////////////////
+		// Iterative refinement
+		timer = omp_get_wtime();            // Timer start
+		assert(0 == LAPACKE_dsytrs(LAPACK_COL_MAJOR, 'L', m, 1, A, lda, ipiv, b, lda));
+		cblas_daxpy(m, 1.0, b, 1, x, 1);
+		timer = omp_get_wtime() - timer;   // Timer stop
+		cout << timer << ", ";
+
+		///////////////////////////////////////////////////////////////////////////////
+		// Check || A*x - b ||
+		for (int i=0; i<m; i++)
+			b[i] = (double)(1.0);
+
+		cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
+		cout << cblas_dnrm2(m, b, 1) << endl;
+	}
 
 	delete [] A;
 	delete [] OA;
 	delete [] ipiv;
 	delete [] b;
 	delete [] x;
+    delete [] r;
 
 	return EXIT_SUCCESS;
 }

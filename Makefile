@@ -1,6 +1,7 @@
 UNAME = $(shell uname)
 ifeq ($(UNAME),Linux)
-	CXX = g++-9
+	# CXX = g++-7
+	CXX = icpc
 	LIB_DIR = /opt/intel/compilers_and_libraries/linux/lib/intel64
 	LIBS = -pthread -lm -ldl
 	MKL_ROOT = /opt/intel/compilers_and_libraries/linux/mkl
