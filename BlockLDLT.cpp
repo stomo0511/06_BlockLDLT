@@ -90,6 +90,14 @@ void cm2ccrb(const int m, const int n, const int mb, const int nb, const double*
     }
 }
 
+// Convert CM to CCRB for one tile
+void cm2ccrb_tile( const int lda, const int mb, const int nb, const double* At, double* Bt)
+{
+	for (int jj=0; jj<nb; jj++)
+		for (int ii=0; ii<mb; ii++)
+			Bt[ ii + jj*mb ] = At[ ii + jj*lda ];
+}
+
 void ccrb2cm(const int m, const int n, const int mb, const int nb, const double* B, double* A)
 {
     const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
@@ -194,34 +202,6 @@ int main(const int argc, const char **argv)
 		{
 			#pragma omp single
 			{
-				// cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
-				for (int j=0; j<p; j++)
-				{
-					int jb = min(m-j*nb,nb);
-					for (int i=j; i<p; i++)
-					{
-						int ib = min(m-i*nb,nb);
-						const double* Aij = A+(j*nb*m + i*nb);
-						double* Bij = B+(j*nb*m + i*nb*jb);
-
-						#pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
-						{
-							#ifdef TRACE
-							trace_cpu_start();
-							trace_label("Yellow", "Conv.");
-							#endif
-
-							for (int jj=0; jj<jb; jj++)
-								for (int ii=0; ii<ib; ii++)
-									Bij[ ii + jj*ib ] = Aij[ ii + jj*m ];
-
-							#ifdef TRACE
-							trace_cpu_stop("Yellow");
-							#endif
-						}
-					}
-				}
-	
 				// Blocked LDLT part start
 				for (int k=0; k<p; k++)
 				{
@@ -237,6 +217,12 @@ int main(const int argc, const char **argv)
 						trace_cpu_start();
 						trace_label("Red", "DSYTRF");
 						#endif
+
+						if (k==0)  // CM2CCRB
+						{
+							const double* Akk = A + (k*nb*lda + k*nb);
+							cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
+						}
 
 						///////////////////////////////
 						// DSYTRF: B_{kk} -> L_{kk}, D_{kk}
@@ -267,6 +253,12 @@ int main(const int argc, const char **argv)
 								trace_label("Green", "DTRSM");
 							}
 							#endif
+
+							if (k==0)  // CM2CCRB
+							{
+								const double* Aik = A + (k*nb*lda + i*nb);
+								cm2ccrb_tile(lda, ib, kb, Aik, Bik);
+							}
 
 							///////////////////////////////
 							// TRSM: B_{ik} -> L_{ik}
@@ -309,6 +301,12 @@ int main(const int argc, const char **argv)
 								}
 								#endif
 
+								if (k==0)  // CM2CCRB
+								{
+									const double* Aij = A + (j*nb*lda + i*nb);
+									cm2ccrb_tile(lda, ib, jb, Aij, Bij);
+								}
+
 								// Update B_{ij}
 								cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 											ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
@@ -333,7 +331,7 @@ int main(const int argc, const char **argv)
 				} // End of k-loop
 
 				// ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
-			for (int j=0; j<p; j++)
+				for (int j=0; j<p; j++)
 				{
 					int jb = min(m-j*nb,nb);
 					for (int i=j; i<p; i++)
