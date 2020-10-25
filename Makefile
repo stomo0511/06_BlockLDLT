@@ -2,7 +2,6 @@ UNAME = $(shell uname)
 ifeq ($(UNAME),Linux)
 	CXX = g++-9
 	LIB_DIR = /opt/intel/compilers_and_libraries/linux/lib/intel64
-	LIBS = -pthread -lm -ldl
 	MKL_ROOT = /opt/intel/compilers_and_libraries/linux/mkl
 	MKL_LIB_DIR = $(MKL_ROOT)/lib/intel64
 endif
@@ -16,10 +15,10 @@ endif
 CXXFLAGS = -m64 -fopenmp -O3
 
 MKL_INC_DIR = $(MKL_ROOT)/include
-# LIBS = -lgomp
-LIBS = -liomp5
 # MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core 
+# LIBS = -lgomp
 MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
+LIBS = -liomp5
 
 OBJS =	BlockLDLT.o
 # OBJS =	BlockLDLT.o trace.o
