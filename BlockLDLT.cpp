@@ -134,12 +134,20 @@ void ccrb2cm(const int m, const int n, const int mb, const int nb, const double*
 // Serial LDLT factorization
 void dsytrf(const int m, const int lda, double* A)
 {
-	for (int i=0; i<m; i++) {
-		for (int j=0; j<n; j++)
-			printf("% 6.4lf, ",A[i + j*m]);
-		cout << endl;
+	double* v = new double [m];
+	for (int k=0; k<m; k++)
+	{
+		for (int i=0; i<k; i++)
+			v[i] = A[k+i*lda]*A[i+i*lda];
+
+		v[k] = A[k+k*lda] - cblas_ddot(k,A+k,lda,v,1);
+		A[k+k*lda] = v[k];
+
+		cblas_dgemv(CblasColMajor, CblasNoTrans,
+				m-k-1, k, -1.0, A+(k+1), lda, v, 1, 1.0, A+(k+1)+k*lda,1);
+		cblas_dscal(m-k-1, 1.0/v[k], A+(k+1)+k*lda, 1);
 	}
-	cout << endl;
+	delete [] v;
 }
 
 // Trace mode
