@@ -5,57 +5,9 @@
 #include <ctime>
 #include <omp.h>
 #include <mkl.h>
-// #include <unistd.h>
+#include <Utils.hpp>
 
 using namespace std;
-
-// Generate random LOWER matrix
-void Gen_rand_lower_mat(const int m, const int n, double *A)
-{
-    // srand(20200409);
-    srand(time(NULL));
-
-    #pragma omp parallel for
-   	for (int j=0; j<n; j++)
-		for (int i=j; i<m; i++)
-			A[i+j*m] = 10.0 - 20.0*(double)rand() / RAND_MAX;
-}
-
-// Show matrix
-void Show_mat(const int m, const int n, double* A)
-{
-    for (int i=0; i<m; i++)
-    {
-        for (int j=0; j<n; j++)
-            printf("% 6.4lf, ",A[i + j*m]);
-        cout << endl;
-    }
-    cout << endl;
-}
-
-// Show tile matrix
-void Show_tilemat(const int m, const int n, const int mb, const int nb, double* A)
-{
-    const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
-    const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
-
-    for (int i=0; i<m; i++)
-    {
-        int ii = i/mb;
-        int ib = min(m-ii*mb,mb);
-        int ti = i - ii*mb;
-        for (int j=0; j<n; j++)
-        {
-            int jj = j/nb;
-            int jb = min(n-jj*nb,nb);
-            int tj = j - jj*nb;
-            
-            printf("% 6.4lf, ",A[m*jj*nb + ii*mb*jb + tj*ib + ti]);
-        }
-        cout << endl;
-    }
-    cout << endl;
-}
 
 void cm2ccrb(const int m, const int n, const int mb, const int nb, const double* A, double* B)
 {
@@ -189,7 +141,7 @@ int main(const int argc, const char **argv)
     /////////////////////////////////////////////////////////
 	double timer;
 
-    Gen_rand_lower_mat(m,m,OA);         // Randomize elements of orig. matrix
+    Gen_rand_sym_mat(m,OA);         // Randomize elements of orig. matrix
 
 	for (int lc=0; lc<MAX_LC; lc++)
 	{
