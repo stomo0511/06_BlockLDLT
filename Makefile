@@ -4,8 +4,8 @@ ifeq ($(UNAME),Linux)
 	CXX = icpc
 	CXXFLAGS = -m64 -openmp -O3
 	LIB_DIR = /opt/intel/compilers_and_libraries/linux/lib/intel64
-	LIBS = -pthread -lm -ldl
-	MKL_LIB_DIR = $(MKLROOT)/lib/intel64
+	MKL_ROOT = /opt/intel/compilers_and_libraries/linux/mkl
+	MKL_LIB_DIR = $(MKL_ROOT)/lib/intel64
 endif
 ifeq ($(UNAME),Darwin)
 	CXX = /usr/local/bin/g++-9
@@ -15,9 +15,13 @@ ifeq ($(UNAME),Darwin)
 	MKL_LIB_DIR = $(MKLROOT)/lib
 endif
 
-LIBS = -liomp5
-MKL_INC_DIR = $(MKLROOT)/include
+CXXFLAGS = -m64 -fopenmp -O3
+
+MKL_INC_DIR = $(MKL_ROOT)/include
+# MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core 
+# LIBS = -lgomp
 MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
+LIBS = -liomp5
 
 OBJS =	BlockLDLT.o
 
