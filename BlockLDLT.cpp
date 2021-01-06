@@ -9,78 +9,12 @@
 
 using namespace std;
 
-void cm2ccrb(const int m, const int n, const int mb, const int nb, const double* A, double* B)
-{
-    const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
-    const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
-
-    for (int j=0; j<q; j++)
-    {
-        int jb = min(n-j*nb,nb);
-        for (int i=j; i<p; i++)
-        {
-            int ib = min(m-i*mb,mb);
-            const double* Aij = A+(j*nb*m + i*mb);
-            double* Bij = B+(j*nb*m + i*mb*jb);
-
-            #pragma omp task depend(in: Aij[0:m*jb]) depend(out: Bij[0:ib*jb])
-            {
-                #ifdef TRACE
-                trace_cpu_start();
-                trace_label("Yellow", "Conv.");
-                #endif
-
-                for (int jj=0; jj<jb; jj++)
-                    for (int ii=0; ii<ib; ii++)
-                        Bij[ ii + jj*ib ] = Aij[ ii + jj*m ];
-
-                #ifdef TRACE
-                trace_cpu_stop("Yellow");
-                #endif
-            }
-        }
-    }
-}
-
 // Convert CM to CCRB for one tile
 void cm2ccrb_tile( const int lda, const int mb, const int nb, const double* At, double* Bt)
 {
 	for (int jj=0; jj<nb; jj++)
 		for (int ii=0; ii<mb; ii++)
 			Bt[ ii + jj*mb ] = At[ ii + jj*lda ];
-}
-
-void ccrb2cm(const int m, const int n, const int mb, const int nb, const double* B, double* A)
-{
-    const int p =  (m % mb == 0) ? m/mb : m/mb+1;   // # tile rows
-    const int q =  (n % nb == 0) ? n/nb : n/nb+1;   // # tile columns
-
-    for (int j=0; j<q; j++)
-    {
-        int jb = min(m-j*nb,nb);
-        for (int i=j; i<p; i++)
-        {
-            int ib = min(m-i*mb,mb);
-            double* Aij = A+(j*nb*m + i*nb);
-            const double* Bij = B+(j*nb*m + i*nb*jb);
-
-            #pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
-            {
-                #ifdef TRACE
-                trace_cpu_start();
-                trace_label("Violet", "Conv.");
-                #endif
-
-                for (int jj=0; jj<jb; jj++)
-                    for (int ii=0; ii<ib; ii++)
-                        Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
-
-                #ifdef TRACE
-                trace_cpu_stop("Violet");
-                #endif
-            }
-        }
-    }
 }
 
 // Serial LDLT factorization
@@ -137,17 +71,17 @@ int main(const int argc, const char **argv)
 
 	double* b = new double [m];        // RHS vector
 	double* x = new double [m];        // Solution vector
-	double* r = new double [m];       // Residure vector
+	double* r = new double [m];        // Residure vector
     /////////////////////////////////////////////////////////
 	double timer;
 
-    Gen_rand_sym_mat(m,OA);         // Randomize elements of orig. matrix
+    Gen_rand_sym_mat(20210106,m,OA);   // Randomize elements of orig. matrix
 
 	for (int lc=0; lc<MAX_LC; lc++)
 	{
 		cblas_dcopy(m*m, OA, 1, A, 1);
 		
-		timer = omp_get_wtime();   // Timer start
+		timer = omp_get_wtime();       // Timer start
 
 		/////////////////////////////////////////////////////////
 		#pragma omp parallel
