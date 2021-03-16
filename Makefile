@@ -1,11 +1,14 @@
 UNAME = $(shell uname)
 ifeq ($(UNAME),Linux)
-	# CXX = g++-7
-	CXX = icpc
-	CXXFLAGS = -m64 -openmp -O3
+	CXX = g++-7
+	# CXX = icpc
+	CXXFLAGS = -m64 -fopenmp -O3
+	# CXXFLAGS = -m64 -openmp -O3
 	LIB_DIR = /opt/intel/compilers_and_libraries/linux/lib/intel64
 	MKL_ROOT = /opt/intel/compilers_and_libraries/linux/mkl
 	MKL_LIB_DIR = $(MKL_ROOT)/lib/intel64
+	MY_ROOT = /home/stomo/WorkSpace
+	MY_UTIL_DIR = $(MY_ROOT)/00_Utils
 endif
 ifeq ($(UNAME),Darwin)
 	CXX = /usr/local/bin/g++-9
