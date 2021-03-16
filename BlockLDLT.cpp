@@ -191,52 +191,69 @@ int main(const int argc, const char **argv)
         int kb = min(m - k * nb, nb);
         double *Bkk = B + (k * nb * lda + k * nb * kb); // Bkk: Top address of B_{kk}
         double *Dk = DD + k * ldd;                      // Dk: diagnal elements of D_{kk}
+		double *LDk = LD + (k * ldd * ldd);             // LDk:
 
         ///////////////////////////////
         // DSYTRF: B_{kk} -> L_{kk}, D_{kk}
-        dsytrf(kb, kb, Bkk); // DSYTRF
+		{
+	        dsytrf(kb, kb, Bkk); // DSYTRF
 
-        for (int i = 0; i < kb; i++) // Set Dk
-            Dk[i] = Bkk[i + i * kb];
-
+	        for (int i = 0; i < kb; i++) // Set Dk
+    	        Dk[i] = Bkk[i + i * kb];
+		}
 
         for (int i = k + 1; i < p; i++)
         {
             int ib = min(m - i * nb, nb);
             double *Bik = B + (k * nb * lda + i * nb * kb); // Bik: Top address of B_{ik}
-            double *LDk = LD + (k * ldd * ldd);             // LDk:
 
             ///////////////////////////////
             // TRSM: B_{ik} -> L_{ik}
-            cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
-                        ib, kb, 1.0, Bkk, kb, Bik, ib);
+			{
+	            cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
+    	                    ib, kb, 1.0, Bkk, kb, Bik, ib);
 
-            for (int l = 0; l < kb; l++)
-            {
-                cblas_dscal(ib, 1.0 / Dk[l], Bik + l * ib, 1);      // B_{ik} <- B_{ik} D_{kk}^{-1}
+        	    for (int l = 0; l < kb; l++)
+            	{
+                	cblas_dscal(ib, 1.0 / Dk[l], Bik + l * ib, 1);      // B_{ik} <- B_{ik} D_{kk}^{-1}
+        	    }
+			}
+        }
+
+        for (int i = k + 1; i < p; i++)
+        {
+            int ib = min(m - i * nb, nb);
+            double *Bik = B + (k * nb * lda + i * nb * kb); // Bik: Top address of B_{ik}
+
+    	    for (int l = 0; l < kb; l++)
+           	{
                 cblas_dcopy(ib, Bik + l * ib, 1, LDk + l * ldd, 1); // LD_k = L_{ik}*D_{kk}
-                cblas_dscal(ib, Dk[l], LDk + l * ldd, 1);
-            }
+   	            cblas_dscal(ib, Dk[l], LDk + l * ldd, 1);
+       	    }
 
-            for (int j = k + 1; j <= i; j++)
+            // for (int j = k + 1; j <= i; j++)
+            for (int j = i; j > k; j--)
             {
                 int jb = min(m - j * nb, nb);
                 double *Bij = B + (j * nb * lda + i * nb * jb);
                 double *Ljk = B + (k * nb * lda + j * nb * kb);
 
+				///////////////////////////////
                 // Update B_{ij}
-                cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-                            ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
+				{
+	                cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+    	                        ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
 
-                // Banish upper part of A_{ii}
-                if (i == j)
-                    for (int ii = 0; ii < ib; ii++)
-                        for (int jj = ii + 1; jj < jb; jj++)
-                            Bij[ii + jj * ib] = 0.0;
-
-            }
+        	        // Banish upper part of A_{ii}
+            	    if (i == j)
+                	    for (int ii = 0; ii < ib; ii++)
+                    	    for (int jj = ii + 1; jj < jb; jj++)
+                        	    Bij[ii + jj * ib] = 0.0;
+				}
+            } // End of j-loop
         } // End of i-loop
     } // End of k-loop
+
     ccrb2cm(m, m, nb, nb, B, A); // Convert CCRB(B) to CM(A)
     /////////////////////////////////////////////////////////
 
