@@ -66,7 +66,7 @@ int main(const int argc, const char **argv)
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* LD = new double [nb*m];    // LD_k = L_{ik}*D_{kk}
+    double* LD = new double [nb*nb];   // LD_k = L_{ik}*D_{kk}
     const int ldd = nb;                // Leading dimension of LD
 
 	double* b = new double [m];        // RHS vector
@@ -133,13 +133,12 @@ int main(const int argc, const char **argv)
 			{
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
-				double* LDk = LD+(k*ldd*ldd);           // LDk:
 
 				// LD_k = L_{ik}*D_{kk}
 				for (int l=0; l<kb; l++)       
 				{
-					cblas_dcopy(ib, Bik+l*ib, 1, LDk+l*ldd, 1);
-					cblas_dscal(ib, Dk[l], LDk+l*ldd, 1); 
+					cblas_dcopy(ib, Bik+l*ib, 1, LD+l*ldd, 1);
+					cblas_dscal(ib, Dk[l], LD+l*ldd, 1); 
 				}
 
 				#pragma omp parallel for
@@ -159,7 +158,7 @@ int main(const int argc, const char **argv)
 					// Update B_{ij}, SYDRK and GEMDM
 					{
 						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-									ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
+									ib, jb, kb, -1.0, LD, ldd, Ljk, jb, 1.0, Bij, ib);
 
 						// Banish upper part of A_{ii}
 						if (i==j)
