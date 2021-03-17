@@ -45,7 +45,7 @@ extern void trace_cpu_stop(const char *color);
 extern void trace_label(const char *color, const char *label);
 #endif
 
-#define MAX_LC 1
+#define MAX_LC 10
 
 int main(const int argc, const char **argv)
 {
@@ -66,7 +66,7 @@ int main(const int argc, const char **argv)
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* LD = new double [nb*nb];   // LD_k = L_{ik}*D_{kk}
+    double* LD = new double [nb*nb];   // LD = L_{ik}*D_{kk}
     const int ldd = nb;                // Leading dimension of LD
 
 	double* b = new double [m];        // RHS vector
@@ -134,7 +134,7 @@ int main(const int argc, const char **argv)
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
 
-				// LD_k = L_{ik}*D_{kk}
+				// LD = L_{ik}*D_{kk}
 				for (int l=0; l<kb; l++)       
 				{
 					cblas_dcopy(ib, Bik+l*ib, 1, LD+l*ldd, 1);
@@ -171,20 +171,6 @@ int main(const int argc, const char **argv)
 		} // End of k-loop
 
 		ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
-		// for (int j=0; j<p; j++)
-		// {
-		// 	int jb = min(m-j*nb,nb);
-		// 	for (int i=j; i<p; i++)
-		// 	{
-		// 		int ib = min(m-i*nb,nb);
-		// 		double* Aij = A+(j*nb*m + i*nb);
-		// 		const double* Bij = B+(j*nb*m + i*nb*jb);
-
-		// 		for (int jj=0; jj<jb; jj++)
-		// 			for (int ii=0; ii<ib; ii++)
-		// 				Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
-		// 	}
-		// }
 		/////////////////////////////////////////////////////////
 
 		timer = omp_get_wtime() - timer; // Timer stop
