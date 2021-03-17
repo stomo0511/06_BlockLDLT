@@ -37,7 +37,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Trace mode
-// #define TRACE
+#define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -45,7 +45,7 @@ extern void trace_cpu_stop(const char *color);
 extern void trace_label(const char *color, const char *label);
 #endif
 
-#define MAX_LC 10
+#define MAX_LC 1
 
 int main(const int argc, const char **argv)
 {
@@ -228,19 +228,19 @@ int main(const int argc, const char **argv)
 
 						#pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
 						{
-							#ifdef TRACE
-							trace_cpu_start();
-							trace_label("Violet", "Conv.");
-							#endif
+							// #ifdef TRACE
+							// trace_cpu_start();
+							// trace_label("Violet", "Conv.");
+							// #endif
 
 							for (int jj=0; jj<jb; jj++)
 								for (int ii=0; ii<ib; ii++)
 									Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
 							// usleep(1000);
 
-							#ifdef TRACE
-							trace_cpu_stop("Violet");
-							#endif
+							// #ifdef TRACE
+							// trace_cpu_stop("Violet");
+							// #endif
 						}
 					}
 				}

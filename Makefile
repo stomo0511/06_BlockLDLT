@@ -20,11 +20,10 @@ ifeq ($(UNAME),Darwin)
 	MY_UTIL_DIR = $(MYROOT)/00_Utils
 endif
 
-# CXXFLAGS = -m64 -fopenmp -O3
-
 LIBS = -pthread -lm -ldl
 
-OBJS =	BlockLDLT.o $(MY_UTIL_DIR)/Utils.o
+# OBJS =	BlockLDLT.o $(MY_UTIL_DIR)/Utils.o
+OBJS =	BlockLDLT.o $(MY_UTIL_DIR)/Utils.o trace.o
 
 TARGET = BlockLDLT
 
@@ -38,6 +37,9 @@ $(TARGET):	$(OBJS)
 
 %.o: %.cpp
 	$(CXX) -c $(CXXFLAGS) -I$(MKLROOT)/include  -I$(MY_UTIL_DIR) -o $@ $<
+
+trace.o: trace.c
+	$(CXX) -O3 -c -o $@ $<
 
 clean:
 	rm -f $(OBJS) $(TARGET)
