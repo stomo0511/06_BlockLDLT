@@ -45,7 +45,7 @@ extern void trace_cpu_stop(const char *color);
 extern void trace_label(const char *color, const char *label);
 #endif
 
-#define MAX_LC 10
+#define MAX_LC 1
 
 int main(const int argc, const char **argv)
 {
@@ -106,6 +106,7 @@ int main(const int argc, const char **argv)
 					Dk[l] = Bkk[l+l*kb];
 			}
 
+			#pragma omp parallel for
 			for (int i=k+1; i<p; i++)
 			{
 				int ib = min(m-i*nb,nb);
@@ -141,6 +142,7 @@ int main(const int argc, const char **argv)
 					cblas_dscal(ib, Dk[l], LDk+l*ldd, 1); 
 				}
 
+				#pragma omp parallel for
 				for (int j=k+1; j<=i; j++)
 				{
 					int jb = min(m-j*nb,nb);
