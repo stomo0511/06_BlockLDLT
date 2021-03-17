@@ -45,7 +45,7 @@ extern void trace_cpu_stop(const char *color);
 extern void trace_label(const char *color, const char *label);
 #endif
 
-#define MAX_LC 1
+#define MAX_LC 10
 
 int main(const int argc, const char **argv)
 {
@@ -66,7 +66,7 @@ int main(const int argc, const char **argv)
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* LD = new double [nb*m];    // LD_k = L_{ik}*D_{kk}
+    double* LD = new double [nb*nb];   // LD = L_{lk}*D_{kk}
     const int ldd = nb;                // Leading dimension of LD
 
 	double* b = new double [m];        // RHS vector
@@ -92,32 +92,32 @@ int main(const int argc, const char **argv)
 			int kb = min(m-k*nb,nb);
 			double* Bkk = B+(k*nb*lda + k*nb*kb);
 			double* Dk = DD+k*ldd;
-			double* LDk = LD+(k*ldd*ldd);
 
-			for (int l=0; l<k; l++)
+			for (int j=0; j<k; j++)
 			{
-				int lb = min(m-l*nb,nb);
-				double* Blk = B+(k*nb*lda + l*nb*kb);
-
-				// LD_k = L_{lk}*D_{kk}
-				for (int l=0; l<kb; l++)       
-				{
-					cblas_dcopy(lb, Blk+l*lb, 1, LDk+l*ldd, 1);
-					cblas_dscal(lb, Dk[l], LDk+l*ldd, 1); 
-				}
+				int jb = min(m-j*nb,nb);
+				double* Bkj = B+(j*nb*lda + k*nb*kb);
+				double* Dj = DD+j*ldd;
 
 				///////////////////////////////
-				// SYDRK: B_{kk} -> L_{lk}, D_{kk}
+				// SYDRK: B_{kk} -> B_{kk} - L_{kj} D_{jj} L^T_{kj}
 				{
+					// LD = L_{kj}*D_{jj}
+					for (int l=0; l<jb; l++)
+					{
+						cblas_dcopy(kb, Bkj+l*kb, 1, LD+l*ldd, 1);
+						cblas_dscal(kb, Dj[l], LD+l*ldd, 1); 
+					}
+
 					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-								lb, kb, kb, -1.0, LDk, ldd, Blk, lb, 1.0, Bkk, kb);
+								kb, kb, jb, -1.0, LD, ldd, Bkj, kb, 1.0, Bkk, kb);
 
 					// Banish upper part of B_{kk}
 					for (int ii=0; ii<kb; ii++)
 						for (int jj=ii+1; jj<kb; jj++)
 							Bkk[ii+jj*kb] = 0.0;
 				}
-			}
+			} // End of j-loop
 
 			///////////////////////////////
 			// DSYTRF: B_{kk} -> L_{kk}, D_{kk}
@@ -131,7 +131,27 @@ int main(const int argc, const char **argv)
 			for (int i=k+1; i<p; i++)
 			{
 				int ib = min(m-i*nb,nb);
-				double* Bik = B+(k*nb*lda + i*nb*kb);
+				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
+
+				for (int j=0; j<k; j++)
+				{
+					int jb = min(m-j*nb,nb);
+					double* Bkj = B+(j*nb*lda + k*nb*kb);
+					double *Bij = B+(j*nb*lda + i*nb*jb);
+					double* Dj = DD+j*ldd;
+
+					// LD = L_{ij}*D_{jj}
+					for (int l=0; l<jb; l++)       
+					{
+						cblas_dcopy(ib, Bij+l*kb, 1, LD+l*ldd, 1);
+						cblas_dscal(ib, Dj[l], LD+l*ldd, 1); 
+					}
+
+					///////////////////////////////
+					// GEMDM: B_{ik} -> B_{ik} - L_{ij} D_{jj} L^T_{kj}
+					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+						ib, jb, kb, -1.0, LD, ldd, Bkj, kb, 1.0, Bik, ib);
+				} // End of j-loop
 
 				///////////////////////////////
 				// TRSM: B_{ik} -> L_{ik}
@@ -142,40 +162,6 @@ int main(const int argc, const char **argv)
 					for (int l=0; l<kb; l++)       
 						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
 				}
-			}
-
-			for (int i=k+1; i<p; i++)
-			{
-				int ib = min(m-i*nb,nb);
-				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
-				double* LDk = LD+(k*ldd*ldd);           // LDk:
-
-				// LD_k = L_{ik}*D_{kk}
-				for (int l=0; l<kb; l++)       
-				{
-					cblas_dcopy(ib, Bik+l*ib, 1, LDk+l*ldd, 1);
-					cblas_dscal(ib, Dk[l], LDk+l*ldd, 1); 
-				}
-
-				for (int j=k+1; j<=i; j++)
-				{
-					int jb = min(m-j*nb,nb);
-					double *Bij = B+(j*nb*lda + i*nb*jb);
-					double *Ljk = B+(k*nb*lda + j*nb*kb);
-
-					///////////////////////////////
-					// Update B_{ij}, SYDRK and GEMDM
-					{
-						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-									ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
-
-						// Banish upper part of A_{ii}
-						if (i==j)
-							for (int ii=0; ii<ib; ii++)
-								for (int jj=ii+1; jj<jb; jj++)
-									Bij[ii+jj*ib] = 0.0;
-					}
-				} // End of j-loop
 			} // End of i-loop
 		} // End of k-loop
 
