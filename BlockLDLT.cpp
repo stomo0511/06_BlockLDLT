@@ -45,7 +45,7 @@ extern void trace_cpu_stop(const char *color);
 extern void trace_label(const char *color, const char *label);
 #endif
 
-#define MAX_LC 10
+#define MAX_LC 1
 
 int main(const int argc, const char **argv)
 {
@@ -83,18 +83,40 @@ int main(const int argc, const char **argv)
 		
 		timer = omp_get_wtime();       // Timer start
 
+		cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
+
 		/////////////////////////////////////////////////////////
 		// Blocked LDLT part start
 		for (int k=0; k<p; k++)
 		{
 			int kb = min(m-k*nb,nb);
-			double* Bkk = B+(k*nb*lda + k*nb*kb);   // Bkk: Top address of B_{kk}
-			double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
+			double* Bkk = B+(k*nb*lda + k*nb*kb);
+			double* Dk = DD+k*ldd;
+			double* LDk = LD+(k*ldd*ldd);
 
-			if (k==0)  // CM2CCRB (Akk -> Bkk)
+			for (int l=0; l<k; l++)
 			{
-				const double* Akk = A + (k*nb*lda + k*nb);
-				cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
+				int lb = min(m-l*nb,nb);
+				double* Blk = B+(k*nb*lda + l*nb*kb);
+
+				// LD_k = L_{lk}*D_{kk}
+				for (int l=0; l<kb; l++)       
+				{
+					cblas_dcopy(lb, Blk+l*lb, 1, LDk+l*ldd, 1);
+					cblas_dscal(lb, Dk[l], LDk+l*ldd, 1); 
+				}
+
+				///////////////////////////////
+				// SYDRK: B_{kk} -> L_{lk}, D_{kk}
+				{
+					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+								lb, kb, kb, -1.0, LDk, ldd, Blk, lb, 1.0, Bkk, kb);
+
+					// Banish upper part of B_{kk}
+					for (int ii=0; ii<kb; ii++)
+						for (int jj=ii+1; jj<kb; jj++)
+							Bkk[ii+jj*kb] = 0.0;
+				}
 			}
 
 			///////////////////////////////
@@ -109,13 +131,7 @@ int main(const int argc, const char **argv)
 			for (int i=k+1; i<p; i++)
 			{
 				int ib = min(m-i*nb,nb);
-				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
-
-				if (k==0)  // CM2CCRB (Aik -> Bik)
-				{
-					const double* Aik = A + (k*nb*lda + i*nb);
-					cm2ccrb_tile(lda, ib, kb, Aik, Bik);
-				}
+				double* Bik = B+(k*nb*lda + i*nb*kb);
 
 				///////////////////////////////
 				// TRSM: B_{ik} -> L_{ik}
@@ -147,12 +163,6 @@ int main(const int argc, const char **argv)
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double *Ljk = B+(k*nb*lda + j*nb*kb);
 
-					if (k==0)  // CM2CCRB (Aij -> Bij)
-					{
-						const double* Aij = A + (j*nb*lda + i*nb);
-						cm2ccrb_tile(lda, ib, jb, Aij, Bij);
-					}
-
 					///////////////////////////////
 					// Update B_{ij}, SYDRK and GEMDM
 					{
@@ -170,20 +180,6 @@ int main(const int argc, const char **argv)
 		} // End of k-loop
 
 		ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
-		// for (int j=0; j<p; j++)
-		// {
-		// 	int jb = min(m-j*nb,nb);
-		// 	for (int i=j; i<p; i++)
-		// 	{
-		// 		int ib = min(m-i*nb,nb);
-		// 		double* Aij = A+(j*nb*m + i*nb);
-		// 		const double* Bij = B+(j*nb*m + i*nb*jb);
-
-		// 		for (int jj=0; jj<jb; jj++)
-		// 			for (int ii=0; ii<ib; ii++)
-		// 				Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
-		// 	}
-		// }
 		/////////////////////////////////////////////////////////
 
 		timer = omp_get_wtime() - timer; // Timer stop
