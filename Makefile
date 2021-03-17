@@ -15,7 +15,7 @@ ifeq ($(UNAME),Darwin)
 	OMP_LIB_ADD = -Wl,-rpath,$(OMP_LIB_DIR)
 	OMP_LIBS = -liomp5
 	MKL_LIB_ADD = -Wl,-rpath,$(MKLROOT)/lib
-	MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
+	MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core 
 	MYROOT = /Users/stomo/WorkSpace/C++
 	MY_UTIL_DIR = $(MYROOT)/00_Utils
 endif

@@ -128,6 +128,7 @@ int main(const int argc, const char **argv)
 					Dk[l] = Bkk[l+l*kb];
 			}
 
+			#pragma omp parallel for
 			for (int i=k+1; i<p; i++)
 			{
 				int ib = min(m-i*nb,nb);
@@ -144,7 +145,7 @@ int main(const int argc, const char **argv)
 					for (int l=0; l<jb; l++)       
 					{
 						cblas_dcopy(ib, Bij+l*kb, 1, LD+l*ldd, 1);
-						cblas_dscal(ib, Dj[l], LD+l*ldd, 1); 
+						cblas_dscal(ib, Dj[l], LD+l*ldd, 1);
 					}
 
 					///////////////////////////////
