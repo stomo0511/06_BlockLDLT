@@ -66,7 +66,7 @@ int main(const int argc, const char **argv)
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* LD = new double [nb*m];    // LD = L_{?j}*D_{jj}
+    double* LD = new double [nb*m];    // LD = L_{i?}*D_{??}
     const int ldd = nb;                // Leading dimension of LD
 
 	double* b = new double [m];        // RHS vector
@@ -97,7 +97,6 @@ int main(const int argc, const char **argv)
 			{
 				int jb = min(m-j*nb,nb);
 				double* Bkj = B+(j*nb*lda + k*nb*kb);
-				double* LDj = LD+j*ldd*ldd;
 				double* Dj = DD+j*ldd;
 
 				///////////////////////////////
@@ -106,12 +105,12 @@ int main(const int argc, const char **argv)
 					// LD = L_{kj}*D_{jj}
 					for (int l=0; l<jb; l++)
 					{
-						cblas_dcopy(kb, Bkj+l*kb, 1, LDj+l*ldd, 1);
-						cblas_dscal(kb, Dj[l], LDj+l*ldd, 1); 
+						cblas_dcopy(kb, Bkj+l*kb, 1, LD+l*ldd, 1);
+						cblas_dscal(kb, Dj[l], LD+l*ldd, 1); 
 					}
 
 					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-								kb, kb, jb, -1.0, LDj, ldd, Bkj, kb, 1.0, Bkk, kb);
+								kb, kb, jb, -1.0, LD, ldd, Bkj, kb, 1.0, Bkk, kb);
 
 					// Banish upper part of B_{kk}
 					for (int ii=0; ii<kb; ii++)
@@ -134,26 +133,26 @@ int main(const int argc, const char **argv)
 			{
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
+				double* LDi = LD+i*ldd*ldd;
 
 				for (int j=0; j<k; j++)
 				{
 					int jb = min(m-j*nb,nb);
 					double* Bkj = B+(j*nb*lda + k*nb*kb);
 					double *Bij = B+(j*nb*lda + i*nb*jb);
-					double* LDj = LD+j*ldd*ldd;
 					double* Dj = DD+j*ldd;
 
 					// LD = L_{ij}*D_{jj}
 					for (int l=0; l<jb; l++)       
 					{
-						cblas_dcopy(ib, Bij+l*kb, 1, LDj+l*ldd, 1);
-						cblas_dscal(ib, Dj[l], LDj+l*ldd, 1);
+						cblas_dcopy(ib, Bij+l*kb, 1, LDi+l*ldd, 1);
+						cblas_dscal(ib, Dj[l], LDi+l*ldd, 1);
 					}
 
 					///////////////////////////////
 					// GEMDM: B_{ik} -> B_{ik} - L_{ij} D_{jj} L^T_{kj}
 					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-						ib, jb, kb, -1.0, LDj, ldd, Bkj, kb, 1.0, Bik, ib);
+						ib, jb, kb, -1.0, LDi, ldd, Bkj, kb, 1.0, Bik, ib);
 				} // End of j-loop
 
 				///////////////////////////////
