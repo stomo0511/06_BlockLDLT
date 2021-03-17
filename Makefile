@@ -5,23 +5,24 @@ ifeq ($(UNAME),Linux)
 	CXXFLAGS = -m64 -openmp -O3
 	LIB_DIR = /opt/intel/compilers_and_libraries/linux/lib/intel64
 	MKL_ROOT = /opt/intel/compilers_and_libraries/linux/mkl
+	MKL_INC_DIR = $(MKL_ROOT)/include
 	MKL_LIB_DIR = $(MKL_ROOT)/lib/intel64
 endif
 ifeq ($(UNAME),Darwin)
-	CXX = /usr/local/bin/g++-9
+	CXX = /usr/local/bin/g++-10
 	CXXFLAGS = -m64 -fopenmp -O3
-	LIB_DIR = /opt/intel/compilers_and_libraries/mac/lib
-	LIBS = -pthread -lm -ldl
-	MKL_LIB_DIR = $(MKLROOT)/lib
-	MY_ROOT = /Users/stomo/WorkSpace/C++
-	MY_UTIL_DIR = $(MY_ROOT)/00_Utils
+	OMP_LIB_DIR = /opt/intel/oneapi/compiler/latest/mac/compiler/lib
+	OMP_LIB_ADD = -Wl,-rpath,$(OMP_LIB_DIR)
+	OMP_LIBS = -liomp5
+	MKL_LIB_ADD = -Wl,-rpath,$(MKLROOT)/lib
+	MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
+	MYROOT = /Users/stomo/WorkSpace/C++
+	MY_UTIL_DIR = $(MYROOT)/00_Utils
 endif
 
 # CXXFLAGS = -m64 -fopenmp -O3
 
-MKL_INC_DIR = $(MKL_ROOT)/include
-MKL_LIBS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core 
-LIBS = -liomp5
+LIBS = -pthread -lm -ldl
 
 OBJS =	BlockLDLT.o $(MY_UTIL_DIR)/Utils.o
 
@@ -30,10 +31,13 @@ TARGET = BlockLDLT
 all:	$(TARGET)
 
 $(TARGET):	$(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) -L$(LIB_DIR) $(LIBS) -L$(MKL_LIB_DIR) $(MKL_LIBS) 
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) \
+	-L$(MKLROOT)/lib $(MKL_LIB_ADD) $(MKL_LIBS) \
+	-L$(OMP_LIB_DIR) $(OMP_LIB_ADD) $(OMP_LIBS) \
+	$(LIBS)
 
 %.o: %.cpp
-	$(CXX) -c $(CXXFLAGS) -I$(MKL_INC_DIR)  -I$(MY_UTIL_DIR) -o $@ $<
+	$(CXX) -c $(CXXFLAGS) -I$(MKLROOT)/include  -I$(MY_UTIL_DIR) -o $@ $<
 
 clean:
 	rm -f $(OBJS) $(TARGET)
