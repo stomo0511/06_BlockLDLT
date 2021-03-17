@@ -84,168 +84,106 @@ int main(const int argc, const char **argv)
 		timer = omp_get_wtime();       // Timer start
 
 		/////////////////////////////////////////////////////////
-		#pragma omp parallel
+		// Blocked LDLT part start
+		for (int k=0; k<p; k++)
 		{
-			#pragma omp single
+			int kb = min(m-k*nb,nb);
+			double* Bkk = B+(k*nb*lda + k*nb*kb);   // Bkk: Top address of B_{kk}
+			double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
+
+			if (k==0)  // CM2CCRB (Akk -> Bkk)
 			{
-				// Blocked LDLT part start
-				for (int k=0; k<p; k++)
+				const double* Akk = A + (k*nb*lda + k*nb);
+				cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
+			}
+
+			///////////////////////////////
+			// DSYTRF: B_{kk} -> L_{kk}, D_{kk}
+			{
+				dsytrf(kb,kb,Bkk);          // DSYTRF
+
+				for (int l=0; l<kb; l++)    // Set Dk
+					Dk[l] = Bkk[l+l*kb];
+			}
+
+			for (int i=k+1; i<p; i++)
+			{
+				int ib = min(m-i*nb,nb);
+				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
+
+				if (k==0)  // CM2CCRB (Aik -> Bik)
 				{
-					int kb = min(m-k*nb,nb);
-					double* Bkk = B+(k*nb*lda + k*nb*kb);   // Bkk: Top address of B_{kk}
-					double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
+					const double* Aik = A + (k*nb*lda + i*nb);
+					cm2ccrb_tile(lda, ib, kb, Aik, Bik);
+				}
 
-					#pragma omp task \
-						depend(inout: Bkk[0:kb*kb]) \
-						depend(out: Dk[0:kb])
-					{
-						#ifdef TRACE
-						trace_cpu_start();
-						trace_label("Red", "DSYTRF");
-						#endif
+				///////////////////////////////
+				// TRSM: B_{ik} -> L_{ik}
+				{
+					cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
+								ib, kb, 1.0, Bkk, kb, Bik, ib);
 
-						if (k==0)  // CM2CCRB
-						{
-							const double* Akk = A + (k*nb*lda + k*nb);
-							cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
-						}
+					for (int l=0; l<kb; l++)       
+						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
+				}
+			}
 
-						///////////////////////////////
-						// DSYTRF: B_{kk} -> L_{kk}, D_{kk}
-						dsytrf(kb,kb,Bkk);          // DSYTRF
+			for (int i=k+1; i<p; i++)
+			{
+				int ib = min(m-i*nb,nb);
+				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
+				double* LDk = LD+(k*ldd*ldd);           // LDk:
 
-						for (int i=0; i<kb; i++)    // Set Dk
-							Dk[i] = Bkk[i+i*kb];
+				// LD_k = L_{ik}*D_{kk}
+				for (int l=0; l<kb; l++)       
+				{
+					cblas_dcopy(ib, Bik+l*ib, 1, LDk+l*ldd, 1);
+					cblas_dscal(ib, Dk[l], LDk+l*ldd, 1); 
+				}
 
-						#ifdef TRACE
-						trace_cpu_stop("Red");
-						#endif
-					}
-
-					for (int i=k+1; i<p; i++)
-					{
-						int ib = min(m-i*nb,nb);
-						double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
-						double* LDk = LD+(k*ldd*ldd);           // LDk:
-
-						#pragma omp task \
-							depend(in: Bkk[0:kb*kb], Dk[0:kb]) \
-							depend(inout: Bik[0:ib*kb]) \
-							depend(out: LDk[0:kb*kb])
-						{
-							#ifdef TRACE
-							{
-								trace_cpu_start();
-								trace_label("Green", "DTRSM");
-							}
-							#endif
-
-							if (k==0)  // CM2CCRB
-							{
-								const double* Aik = A + (k*nb*lda + i*nb);
-								cm2ccrb_tile(lda, ib, kb, Aik, Bik);
-							}
-
-							///////////////////////////////
-							// TRSM: B_{ik} -> L_{ik}
-							cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
-										ib, kb, 1.0, Bkk, kb, Bik, ib);
-
-							for (int l=0; l<kb; l++)       
-							{
-								cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
-								cblas_dcopy(ib, Bik+l*ib, 1, LDk+l*ldd, 1);  // LD_k = L_{ik}*D_{kk}
-								cblas_dscal(ib, Dk[l], LDk+l*ldd, 1); 
-							}
-
-							#ifdef TRACE
-							{
-								trace_cpu_stop("Green");
-							}
-							#endif
-						}
-
-						for (int j=k+1; j<=i; j++)
-						{
-							int jb = min(m-j*nb,nb);
-							double *Bij = B+(j*nb*lda + i*nb*jb);
-							double *Ljk = B+(k*nb*lda + j*nb*kb);
-
-							#pragma omp task \
-								depend(in: LDk[0:kb*kb], Ljk[0:jb*kb]) \
-								depend(inout: Bij[0:ib*jb])
-							{
-								#ifdef TRACE
-								{
-									if (i==j) {
-										trace_cpu_start();
-										trace_label("Cyan", "DSYDRK");
-									} else {
-										trace_cpu_start();
-										trace_label("Blue", "DGEMDM");
-									}
-								}
-								#endif
-
-								if (k==0)  // CM2CCRB
-								{
-									const double* Aij = A + (j*nb*lda + i*nb);
-									cm2ccrb_tile(lda, ib, jb, Aij, Bij);
-								}
-
-								// Update B_{ij}
-								cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-											ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
-
-								// Banish upper part of A_{ii}
-								if (i==j)
-									for (int ii=0; ii<ib; ii++)
-										for (int jj=ii+1; jj<jb; jj++)
-											Bij[ii+jj*ib] = 0.0;
-
-								#ifdef TRACE
-								{
-									if (i==j)
-										trace_cpu_stop("Cyan");
-									else
-										trace_cpu_stop("Blue");
-								}
-								#endif
-							}
-						}
-					} // End of i-loop
-				} // End of k-loop
-
-				// ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
-				for (int j=0; j<p; j++)
+				for (int j=k+1; j<=i; j++)
 				{
 					int jb = min(m-j*nb,nb);
-					for (int i=j; i<p; i++)
+					double *Bij = B+(j*nb*lda + i*nb*jb);
+					double *Ljk = B+(k*nb*lda + j*nb*kb);
+
+					if (k==0)  // CM2CCRB (Aij -> Bij)
 					{
-						int ib = min(m-i*nb,nb);
-						double* Aij = A+(j*nb*m + i*nb);
-						const double* Bij = B+(j*nb*m + i*nb*jb);
-
-						#pragma omp task depend(in: Bij[0:ib*jb]) depend(out: Aij[0:m*jb])
-						{
-							#ifdef TRACE
-							trace_cpu_start();
-							trace_label("Violet", "Conv.");
-							#endif
-
-							for (int jj=0; jj<jb; jj++)
-								for (int ii=0; ii<ib; ii++)
-									Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
-							// usleep(1000);
-
-							#ifdef TRACE
-							trace_cpu_stop("Violet");
-							#endif
-						}
+						const double* Aij = A + (j*nb*lda + i*nb);
+						cm2ccrb_tile(lda, ib, jb, Aij, Bij);
 					}
-				}
-			} // End of single region
-		} // End of parallel region
+
+					///////////////////////////////
+					// Update B_{ij}, SYDRK and GEMDM
+					{
+						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+									ib, jb, kb, -1.0, LDk, ldd, Ljk, jb, 1.0, Bij, ib);
+
+						// Banish upper part of A_{ii}
+						if (i==j)
+							for (int ii=0; ii<ib; ii++)
+								for (int jj=ii+1; jj<jb; jj++)
+									Bij[ii+jj*ib] = 0.0;
+					}
+				} // End of j-loop
+			} // End of i-loop
+		} // End of k-loop
+
+		ccrb2cm(m,m,nb,nb,B,A);    // Convert CCRB(B) to CM(A)
+		// for (int j=0; j<p; j++)
+		// {
+		// 	int jb = min(m-j*nb,nb);
+		// 	for (int i=j; i<p; i++)
+		// 	{
+		// 		int ib = min(m-i*nb,nb);
+		// 		double* Aij = A+(j*nb*m + i*nb);
+		// 		const double* Bij = B+(j*nb*m + i*nb*jb);
+
+		// 		for (int jj=0; jj<jb; jj++)
+		// 			for (int ii=0; ii<ib; ii++)
+		// 				Aij[ ii+jj*m ] = Bij[ ii+jj*ib ];
+		// 	}
+		// }
 		/////////////////////////////////////////////////////////
 
 		timer = omp_get_wtime() - timer; // Timer stop
