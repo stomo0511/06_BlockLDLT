@@ -136,7 +136,7 @@ int main(const int argc, const char **argv)
 							#ifdef TRACE
 							{
 								trace_cpu_start();
-								trace_label("Green", "DTRSM");
+								trace_label("Green", "DTRSDM");
 							}
 							#endif
 
