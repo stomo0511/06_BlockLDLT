@@ -37,7 +37,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Trace mode
-// #define TRACE
+#define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -45,7 +45,7 @@ extern void trace_cpu_stop(const char *color);
 extern void trace_label(const char *color, const char *label);
 #endif
 
-#define MAX_LC 10
+#define MAX_LC 1
 
 int main(const int argc, const char **argv)
 {
@@ -102,6 +102,11 @@ int main(const int argc, const char **argv)
 				///////////////////////////////
 				// SYDRK: B_{kk} -> B_{kk} - L_{kj} D_{jj} L^T_{kj}
 				{
+					#ifdef TRACE
+					trace_cpu_start();
+					trace_label("Cyan", "DSYDRK");
+					#endif
+
 					// LD = L_{kj}*D_{jj}
 					for (int l=0; l<jb; l++)
 					{
@@ -116,16 +121,29 @@ int main(const int argc, const char **argv)
 					for (int ii=0; ii<kb; ii++)
 						for (int jj=ii+1; jj<kb; jj++)
 							Bkk[ii+jj*kb] = 0.0;
+
+					#ifdef TRACE
+					trace_cpu_stop("Cyan");
+					#endif
 				}
 			} // End of j-loop
 
 			///////////////////////////////
 			// DSYTRF: B_{kk} -> L_{kk}, D_{kk}
 			{
+				#ifdef TRACE
+				trace_cpu_start();
+				trace_label("Red", "DSYTRF");
+				#endif
+
 				dsytrf(kb,kb,Bkk);          // DSYTRF
 
 				for (int l=0; l<kb; l++)    // Set Dk
 					Dk[l] = Bkk[l+l*kb];
+
+				#ifdef TRACE
+				trace_cpu_stop("Red");
+				#endif
 			}
 
 			#pragma omp parallel for
@@ -142,6 +160,11 @@ int main(const int argc, const char **argv)
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double* Dj = DD+j*ldd;
 
+					#ifdef TRACE
+					trace_cpu_start();
+					trace_label("Blue", "DGEMDM");
+					#endif
+
 					// LD = L_{ij}*D_{jj}
 					for (int l=0; l<jb; l++)       
 					{
@@ -153,16 +176,29 @@ int main(const int argc, const char **argv)
 					// GEMDM: B_{ik} -> B_{ik} - L_{ij} D_{jj} L^T_{kj}
 					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 						ib, jb, kb, -1.0, LDi, ldd, Bkj, kb, 1.0, Bik, ib);
+
+					#ifdef TRACE
+					trace_cpu_stop("Blue");
+					#endif
 				} // End of j-loop
 
 				///////////////////////////////
 				// TRSM: B_{ik} -> L_{ik}
 				{
+					#ifdef TRACE
+					trace_cpu_start();
+					trace_label("Green", "DTRSDM");
+					#endif
+
 					cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
 								ib, kb, 1.0, Bkk, kb, Bik, ib);
 
 					for (int l=0; l<kb; l++)       
 						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
+
+					#ifdef TRACE
+					trace_cpu_stop("Green");
+					#endif
 				}
 			} // End of i-loop
 		} // End of k-loop
