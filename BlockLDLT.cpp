@@ -37,7 +37,7 @@ void dsytrf(const int m, const int lda, double* A)
 }
 
 // Trace mode
-// #define TRACE
+#define TRACE
 
 #ifdef TRACE
 extern void trace_cpu_start();
@@ -45,7 +45,7 @@ extern void trace_cpu_stop(const char *color);
 extern void trace_label(const char *color, const char *label);
 #endif
 
-#define MAX_LC 10
+#define MAX_LC 1
 
 int main(const int argc, const char **argv)
 {
@@ -91,19 +91,28 @@ int main(const int argc, const char **argv)
 			double* Bkk = B+(k*nb*lda + k*nb*kb);   // Bkk: Top address of B_{kk}
 			double* Dk = DD+k*ldd;                  // Dk: diagnal elements of D_{kk}
 
-			if (k==0)  // CM2CCRB (Akk -> Bkk)
-			{
-				const double* Akk = A + (k*nb*lda + k*nb);
-				cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
-			}
-
 			///////////////////////////////
 			// DSYTRF: B_{kk} -> L_{kk}, D_{kk}
 			{
+				#ifdef TRACE
+				trace_cpu_start();
+				trace_label("Red", "DSYTRF");
+				#endif
+
+				if (k==0)  // CM2CCRB (Akk -> Bkk)
+				{
+					const double* Akk = A + (k*nb*lda + k*nb);
+					cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
+				}
+
 				dsytrf(kb,kb,Bkk);          // DSYTRF
 
 				for (int l=0; l<kb; l++)    // Set Dk
 					Dk[l] = Bkk[l+l*kb];
+
+				#ifdef TRACE
+				trace_cpu_stop("Red");
+				#endif
 			}
 
 			#pragma omp parallel for
@@ -112,20 +121,29 @@ int main(const int argc, const char **argv)
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
 
-				if (k==0)  // CM2CCRB (Aik -> Bik)
-				{
-					const double* Aik = A + (k*nb*lda + i*nb);
-					cm2ccrb_tile(lda, ib, kb, Aik, Bik);
-				}
-
 				///////////////////////////////
 				// TRSM: B_{ik} -> L_{ik}
 				{
+					#ifdef TRACE
+					trace_cpu_start();
+					trace_label("Green", "DTRSDM");
+					#endif
+
+					if (k==0)  // CM2CCRB (Aik -> Bik)
+					{
+						const double* Aik = A + (k*nb*lda + i*nb);
+						cm2ccrb_tile(lda, ib, kb, Aik, Bik);
+					}
+
 					cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
 								ib, kb, 1.0, Bkk, kb, Bik, ib);
 
 					for (int l=0; l<kb; l++)       
 						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
+					
+					#ifdef TRACE
+					trace_cpu_stop("Green");
+					#endif
 				}
 			}
 
@@ -148,15 +166,23 @@ int main(const int argc, const char **argv)
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double *Ljk = B+(k*nb*lda + j*nb*kb);
 
-					if (k==0)  // CM2CCRB (Aij -> Bij)
-					{
-						const double* Aij = A + (j*nb*lda + i*nb);
-						cm2ccrb_tile(lda, ib, jb, Aij, Bij);
-					}
-
 					///////////////////////////////
 					// Update B_{ij}, SYDRK and GEMDM
 					{
+						#ifdef TRACE
+						trace_cpu_start();
+						if (i==j)
+							trace_label("Cyan", "DSYDRK");
+						else
+							trace_label("Blue", "DGEMDM");
+						#endif
+
+						if (k==0)  // CM2CCRB (Aij -> Bij)
+						{
+							const double* Aij = A + (j*nb*lda + i*nb);
+							cm2ccrb_tile(lda, ib, jb, Aij, Bij);
+						}
+
 						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 									ib, jb, kb, -1.0, LD, ldd, Ljk, jb, 1.0, Bij, ib);
 
@@ -165,6 +191,13 @@ int main(const int argc, const char **argv)
 							for (int ii=0; ii<ib; ii++)
 								for (int jj=ii+1; jj<jb; jj++)
 									Bij[ii+jj*ib] = 0.0;
+						
+						#ifdef TRACE
+						if (i==j)
+							trace_cpu_stop("Cyan");
+						else
+							trace_cpu_stop("Blue");
+						#endif
 					}
 				} // End of j-loop
 			} // End of i-loop
