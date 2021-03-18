@@ -83,7 +83,7 @@ int main(const int argc, const char **argv)
 		
 		timer = omp_get_wtime();       // Timer start
 
-		cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
+		// cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
 
 		/////////////////////////////////////////////////////////
 		// Blocked LDLT part start
@@ -92,6 +92,12 @@ int main(const int argc, const char **argv)
 			int kb = min(m-k*nb,nb);
 			double* Bkk = B+(k*nb*lda + k*nb*kb);
 			double* Dk = DD+k*ldd;
+
+			// CM2CCRB (Akk -> Bkk)
+			{
+				const double* Akk = A + (k*nb*lda + k*nb);
+				cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
+			}
 
 			for (int j=0; j<k; j++)
 			{
@@ -133,6 +139,12 @@ int main(const int argc, const char **argv)
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
 
+				// CM2CCRB (Aik -> Bik)
+				{
+					const double* Aik = A + (k*nb*lda + i*nb);
+					cm2ccrb_tile(lda, ib, kb, Aik, Bik);
+				}
+
 				for (int j=0; j<k; j++)
 				{
 					int jb = min(m-j*nb,nb);
@@ -140,17 +152,19 @@ int main(const int argc, const char **argv)
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double* Dj = DD+j*ldd;
 
-					// LD = L_{ij}*D_{jj}
-					for (int l=0; l<jb; l++)       
-					{
-						cblas_dcopy(ib, Bij+l*kb, 1, LD+l*ldd, 1);
-						cblas_dscal(ib, Dj[l], LD+l*ldd, 1); 
-					}
-
 					///////////////////////////////
 					// GEMDM: B_{ik} -> B_{ik} - L_{ij} D_{jj} L^T_{kj}
-					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-						ib, jb, kb, -1.0, LD, ldd, Bkj, kb, 1.0, Bik, ib);
+					{
+						// LD = L_{ij}*D_{jj}
+						for (int l=0; l<jb; l++)       
+						{
+							cblas_dcopy(ib, Bij+l*kb, 1, LD+l*ldd, 1);
+							cblas_dscal(ib, Dj[l], LD+l*ldd, 1); 
+						}
+
+						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+							ib, jb, kb, -1.0, LD, ldd, Bkj, kb, 1.0, Bik, ib);
+					}
 				} // End of j-loop
 
 				///////////////////////////////
@@ -159,8 +173,9 @@ int main(const int argc, const char **argv)
 					cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
 								ib, kb, 1.0, Bkk, kb, Bik, ib);
 
+					// B_{ik} <- B_{ik} D_{kk}^{-1}
 					for (int l=0; l<kb; l++)       
-						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
+						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     
 				}
 			} // End of i-loop
 		} // End of k-loop
