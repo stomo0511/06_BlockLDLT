@@ -83,8 +83,6 @@ int main(const int argc, const char **argv)
 		
 		timer = omp_get_wtime();       // Timer start
 
-		cm2ccrb(m,m,nb,nb,A,B);    // Convert CM(A) to CCRB(B)
-
 		/////////////////////////////////////////////////////////
 		// Blocked LDLT part start
 		for (int k=0; k<p; k++)
@@ -92,6 +90,12 @@ int main(const int argc, const char **argv)
 			int kb = min(m-k*nb,nb);
 			double* Bkk = B+(k*nb*lda + k*nb*kb);
 			double* Dk = DD+k*ldd;
+
+			// CM2CCRB (Akk -> Bkk)
+			{
+				const double* Akk = A + (k*nb*lda + k*nb);
+				cm2ccrb_tile(lda, kb, kb, Akk, Bkk);
+			}
 
 			for (int j=0; j<k; j++)
 			{
@@ -153,6 +157,12 @@ int main(const int argc, const char **argv)
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
 				double* LDi = LD+i*ldd*ldd;
 
+				// CM2CCRB (Aik -> Bik)
+				{
+					const double* Aik = A + (k*nb*lda + i*nb);
+					cm2ccrb_tile(lda, ib, kb, Aik, Bik);
+				}
+
 				for (int j=0; j<k; j++)
 				{
 					int jb = min(m-j*nb,nb);
@@ -160,26 +170,28 @@ int main(const int argc, const char **argv)
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double* Dj = DD+j*ldd;
 
-					#ifdef TRACE
-					trace_cpu_start();
-					trace_label("Blue", "DGEMDM");
-					#endif
-
-					// LD = L_{ij}*D_{jj}
-					for (int l=0; l<jb; l++)       
-					{
-						cblas_dcopy(ib, Bij+l*kb, 1, LDi+l*ldd, 1);
-						cblas_dscal(ib, Dj[l], LDi+l*ldd, 1);
-					}
-
 					///////////////////////////////
 					// GEMDM: B_{ik} -> B_{ik} - L_{ij} D_{jj} L^T_{kj}
-					cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-						ib, jb, kb, -1.0, LDi, ldd, Bkj, kb, 1.0, Bik, ib);
+					{
+						#ifdef TRACE
+						trace_cpu_start();
+						trace_label("Blue", "DGEMDM");
+						#endif
 
-					#ifdef TRACE
-					trace_cpu_stop("Blue");
-					#endif
+						// LD = L_{ij}*D_{jj}
+						for (int l=0; l<jb; l++)       
+						{
+							cblas_dcopy(ib, Bij+l*kb, 1, LDi+l*ldd, 1);
+							cblas_dscal(ib, Dj[l], LDi+l*ldd, 1);
+						}
+
+						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+							ib, jb, kb, -1.0, LDi, ldd, Bkj, kb, 1.0, Bik, ib);
+
+						#ifdef TRACE
+						trace_cpu_stop("Blue");
+						#endif
+					}
 				} // End of j-loop
 
 				///////////////////////////////
