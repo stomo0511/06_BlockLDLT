@@ -75,7 +75,7 @@ int main(const int argc, const char **argv)
     /////////////////////////////////////////////////////////
 	double timer;
 
-    Gen_rand_sym_mat(20210106,m,OA);   // Randomize elements of orig. matrix
+    Gen_rand_sym_mat((unsigned int)time(NULL),m,OA);   // Randomize elements of orig. matrix
 
 	for (int lc=0; lc<MAX_LC; lc++)
 	{
@@ -100,7 +100,7 @@ int main(const int argc, const char **argv)
 			for (int j=0; j<k; j++)
 			{
 				int jb = min(m-j*nb,nb);
-				double* Bkj = B+(j*nb*lda + k*nb*kb);
+				double* Bkj = B+(j*nb*lda + k*nb*jb);
 				double* Dj = DD+j*ldd;
 
 				///////////////////////////////
@@ -148,7 +148,7 @@ int main(const int argc, const char **argv)
 				for (int j=0; j<k; j++)
 				{
 					int jb = min(m-j*nb,nb);
-					double* Bkj = B+(j*nb*lda + k*nb*kb);
+					double* Bkj = B+(j*nb*lda + k*nb*jb);
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double* Dj = DD+j*ldd;
 
@@ -158,13 +158,12 @@ int main(const int argc, const char **argv)
 						// LD = L_{ij}*D_{jj}
 						for (int l=0; l<jb; l++)       
 						{
-							cblas_dcopy(ib, Bij+l*kb, 1, LDi+l*ldd, 1);
+							cblas_dcopy(ib, Bij+l*ib, 1, LDi+l*ldd, 1);
 							cblas_dscal(ib, Dj[l], LDi+l*ldd, 1);
 						}
 
-
 						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-							ib, jb, kb, -1.0, LDi, ldd, Bkj, kb, 1.0, Bik, ib);
+							ib, kb, jb, -1.0, LDi, ldd, Bkj, kb, 1.0, Bik, ib);
 					}
 				} // End of j-loop
 
@@ -174,8 +173,9 @@ int main(const int argc, const char **argv)
 					cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
 								ib, kb, 1.0, Bkk, kb, Bik, ib);
 
+					// B_{ik} <- B_{ik} D_{kk}^{-1}
 					for (int l=0; l<kb; l++)       
-						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     // B_{ik} <- B_{ik} D_{kk}^{-1}
+						cblas_dscal(ib, 1.0/Dk[l], Bik+l*ib, 1);     
 				}
 			} // End of i-loop
 		} // End of k-loop
