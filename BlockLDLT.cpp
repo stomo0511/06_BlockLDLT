@@ -158,12 +158,12 @@ int main(const int argc, const char **argv)
 						// LD = L_{ij}*D_{jj}
 						for (int l=0; l<jb; l++)       
 						{
-							cblas_dcopy(ib, Bij+l*kb, 1, LD+l*ldd, 1);
+							cblas_dcopy(ib, Bij+l*ib, 1, LD+l*ldd, 1);
 							cblas_dscal(ib, Dj[l], LD+l*ldd, 1); 
 						}
 
 						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-							ib, jb, kb, -1.0, LD, ldd, Bkj, kb, 1.0, Bik, ib);
+							ib, kb, jb, -1.0, LD, ldd, Bkj, kb, 1.0, Bik, ib);
 					}
 				} // End of j-loop
 
