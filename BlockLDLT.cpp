@@ -148,7 +148,7 @@ int main(const int argc, const char **argv)
 				for (int j=0; j<k; j++)
 				{
 					int jb = min(m-j*nb,nb);
-					double* Bkj = B+(j*nb*lda + k*nb*kb);
+					double* Bkj = B+(j*nb*lda + k*nb*jb);
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double* Dj = DD+j*ldd;
 
