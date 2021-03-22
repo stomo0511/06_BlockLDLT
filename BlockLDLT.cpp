@@ -132,7 +132,6 @@ int main(const int argc, const char **argv)
 					Dk[l] = Bkk[l+l*kb];
 			}
 
-			#pragma omp parallel for
 			for (int i=k+1; i<p; i++)
 			{
 				int ib = min(m-i*nb,nb);
@@ -205,13 +204,11 @@ int main(const int argc, const char **argv)
 			m, 1, 1.0, A, lda, x, lda);
 
 		timer = omp_get_wtime() - timer;   // Timer stop
-		// cout << m << ", " << timer << endl;
-		cout << timer << ", ";
+		std::cout << timer << ", ";
 
 		// b := b - A*x
 		cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-		// cout << "No piv LDLT:    || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
-		cout << cblas_dnrm2(m, b, 1) << ", ";
+		std::cout << cblas_dnrm2(m, b, 1) << ", ";
 
 		////////// Iterative refinement //////////
 		cblas_dcopy(m,b,1,r,1);
@@ -236,13 +233,11 @@ int main(const int argc, const char **argv)
 		cblas_daxpy(m,1.0,r,1,x,1);
 
 		timer = omp_get_wtime() - timer;   // Timer stop
-		// cout << m << ", " << timer << endl;
-		cout << timer << ", ";
+		std::cout << timer << ", ";
 
 		// b := b - A*x
 		cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-		// cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
-		cout << cblas_dnrm2(m, b, 1) << endl;
+		std::cout << cblas_dnrm2(m, b, 1) << endl;
 		/////////////////////////////////////////////////////////
 	}
 
