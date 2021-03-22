@@ -100,7 +100,7 @@ int main(const int argc, const char **argv)
 			for (int j=0; j<k; j++)
 			{
 				int jb = min(m-j*nb,nb);
-				double* Bkj = B+(j*nb*lda + k*nb*kb);
+				double* Bkj = B+(j*nb*lda + k*nb*jb);
 				double* Dj = DD+j*ldd;
 
 				///////////////////////////////
@@ -155,7 +155,7 @@ int main(const int argc, const char **argv)
 			{
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
-				double* LDi = LD+i*ldd*ldd;
+				double* LDi = LD+(i-1)*nb*ldd;
 
 				// CM2CCRB (Aik -> Bik)
 				{
@@ -166,7 +166,7 @@ int main(const int argc, const char **argv)
 				for (int j=0; j<k; j++)
 				{
 					int jb = min(m-j*nb,nb);
-					double* Bkj = B+(j*nb*lda + k*nb*kb);
+					double* Bkj = B+(j*nb*lda + k*nb*jb);
 					double *Bij = B+(j*nb*lda + i*nb*jb);
 					double* Dj = DD+j*ldd;
 
@@ -181,7 +181,7 @@ int main(const int argc, const char **argv)
 						// LD = L_{ij}*D_{jj}
 						for (int l=0; l<jb; l++)       
 						{
-							cblas_dcopy(ib, Bij+l*kb, 1, LDi+l*ldd, 1);
+							cblas_dcopy(ib, Bij+l*ib, 1, LDi+l*ldd, 1);
 							cblas_dscal(ib, Dj[l], LDi+l*ldd, 1);
 						}
 
