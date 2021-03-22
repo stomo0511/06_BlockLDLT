@@ -7,8 +7,6 @@
 #include <mkl.h>
 #include <Utils.hpp>
 
-using namespace std;
-
 // Convert CM to CCRB for one tile
 void cm2ccrb_tile( const int lda, const int mb, const int nb, const double* At, double* Bt)
 {
@@ -66,7 +64,7 @@ int main(const int argc, const char **argv)
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* LD = new double [nb*m];    // LD = L_{i?}*D_{??}
+    double* LD = new double [nb*m];    // LD = L_{lk}*D_{kk}
     const int ldd = nb;                // Leading dimension of LD
 
 	double* b = new double [m];        // RHS vector
@@ -137,7 +135,7 @@ int main(const int argc, const char **argv)
 			{
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
-				double* LDi = LD+i*ldd*ldd;
+				double* LDi = LD+((i-1)*nb*ldd);
 
 				// CM2CCRB (Aik -> Bik)
 				{
@@ -159,7 +157,7 @@ int main(const int argc, const char **argv)
 						for (int l=0; l<jb; l++)       
 						{
 							cblas_dcopy(ib, Bij+l*ib, 1, LDi+l*ldd, 1);
-							cblas_dscal(ib, Dj[l], LDi+l*ldd, 1);
+							cblas_dscal(ib, Dj[l], LDi+l*ldd, 1); 
 						}
 
 						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
@@ -168,7 +166,7 @@ int main(const int argc, const char **argv)
 				} // End of j-loop
 
 				///////////////////////////////
-				// TRSM: B_{ik} -> L_{ik}
+				// TRSDM: B_{ik} -> L_{ik}
 				{
 					cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
 								ib, kb, 1.0, Bkk, kb, Bik, ib);
@@ -184,7 +182,7 @@ int main(const int argc, const char **argv)
 		/////////////////////////////////////////////////////////
 
 		timer = omp_get_wtime() - timer; // Timer stop
-		cout << m << ", " << nb << ", " << timer << ", ";
+		std::cout << m << ", " << nb << ", " << timer << ", ";
 
 		/////////////////////////////////////////////////////////
 		for (int i=0; i<m; i++)
@@ -205,13 +203,11 @@ int main(const int argc, const char **argv)
 			m, 1, 1.0, A, lda, x, lda);
 
 		timer = omp_get_wtime() - timer;   // Timer stop
-		// cout << m << ", " << timer << endl;
-		cout << timer << ", ";
+		std::cout << timer << ", ";
 
 		// b := b - A*x
 		cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-		// cout << "No piv LDLT:    || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
-		cout << cblas_dnrm2(m, b, 1) << ", ";
+		std::cout << cblas_dnrm2(m, b, 1) << ", ";
 
 		////////// Iterative refinement //////////
 		cblas_dcopy(m,b,1,r,1);
@@ -236,13 +232,11 @@ int main(const int argc, const char **argv)
 		cblas_daxpy(m,1.0,r,1,x,1);
 
 		timer = omp_get_wtime() - timer;   // Timer stop
-		// cout << m << ", " << timer << endl;
-		cout << timer << ", ";
+		std::cout << timer << ", ";
 
 		// b := b - A*x
 		cblas_dsymv(CblasColMajor, CblasLower, m, -1.0, OA, lda, x, 1, 1.0, b, 1);
-		// cout << "Apply 1 it ref: || b - A*x ||_2 = " << cblas_dnrm2(m, b, 1) << endl;
-		cout << cblas_dnrm2(m, b, 1) << endl;
+		std::cout << cblas_dnrm2(m, b, 1) << endl;
 		/////////////////////////////////////////////////////////
 	}
 
