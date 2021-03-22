@@ -7,8 +7,6 @@
 #include <mkl.h>
 #include <Utils.hpp>
 
-using namespace std;
-
 // Convert CM to CCRB for one tile
 void cm2ccrb_tile( const int lda, const int mb, const int nb, const double* At, double* Bt)
 {
@@ -66,7 +64,7 @@ int main(const int argc, const char **argv)
     const int lda = m;                 // Leading dimension of A
 
     double* DD = new double [m];       // DD_k = Diagonal elements of D_{kk}
-    double* LD = new double [nb*nb];   // LD = L_{lk}*D_{kk}
+    double* LD = new double [nb*m];    // LD = L_{lk}*D_{kk}
     const int ldd = nb;                // Leading dimension of LD
 
 	double* b = new double [m];        // RHS vector
@@ -134,10 +132,12 @@ int main(const int argc, const char **argv)
 					Dk[l] = Bkk[l+l*kb];
 			}
 
+			#pragma omp parallel for
 			for (int i=k+1; i<p; i++)
 			{
 				int ib = min(m-i*nb,nb);
 				double* Bik = B+(k*nb*lda + i*nb*kb);   // Bik: Top address of B_{ik}
+				double* LDi = LD+((i-1)*nb*ldd);
 
 				// CM2CCRB (Aik -> Bik)
 				{
@@ -158,17 +158,17 @@ int main(const int argc, const char **argv)
 						// LD = L_{ij}*D_{jj}
 						for (int l=0; l<jb; l++)       
 						{
-							cblas_dcopy(ib, Bij+l*ib, 1, LD+l*ldd, 1);
-							cblas_dscal(ib, Dj[l], LD+l*ldd, 1); 
+							cblas_dcopy(ib, Bij+l*ib, 1, LDi+l*ldd, 1);
+							cblas_dscal(ib, Dj[l], LDi+l*ldd, 1); 
 						}
 
 						cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-							ib, kb, jb, -1.0, LD, ldd, Bkj, kb, 1.0, Bik, ib);
+							ib, kb, jb, -1.0, LDi, ldd, Bkj, kb, 1.0, Bik, ib);
 					}
 				} // End of j-loop
 
 				///////////////////////////////
-				// TRSM: B_{ik} -> L_{ik}
+				// TRSDM: B_{ik} -> L_{ik}
 				{
 					cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasUnit,
 								ib, kb, 1.0, Bkk, kb, Bik, ib);
@@ -184,7 +184,7 @@ int main(const int argc, const char **argv)
 		/////////////////////////////////////////////////////////
 
 		timer = omp_get_wtime() - timer; // Timer stop
-		cout << m << ", " << nb << ", " << timer << ", ";
+		std::cout << m << ", " << nb << ", " << timer << ", ";
 
 		/////////////////////////////////////////////////////////
 		for (int i=0; i<m; i++)
